@@ -7,11 +7,7 @@ import fs from "fs";
 
 const router = Router();
 
-// Setup multer for handling PDF file uploads
-const uploadDir = path.join(__dirname, "../../uploads");
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
+// Setup multer for handling PDF file uploads directly in memory
 
 const storage = multer.memoryStorage();
 
