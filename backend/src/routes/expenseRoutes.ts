@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { applyForReimbursement, getReimbursements } from "../controllers/expenseController";
-import { authMiddleware } from "../middleware/auth";
-import multer from "multer";
+import { applyForReimbursement, getReimbursements, getExpenses, assignApprovers, getExpenseAuditLogs } from "../controllers/expenseController";
+import { authMiddleware, requireRole } from "../middleware/auth";
+import multer, { FileFilterCallback } from "multer";
 import path from "path";
 import fs from "fs";
 
@@ -14,11 +14,11 @@ const storage = multer.memoryStorage();
 const upload = multer({
     storage,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-    fileFilter: (req, file, cb) => {
+    fileFilter: (req: any, file: any, cb: FileFilterCallback) => {
         if (file.mimetype === "application/pdf") {
             cb(null, true);
         } else {
-            cb(new Error("Only PDF files are allowed"));
+            cb(null, false);
         }
     },
 });
@@ -35,5 +35,10 @@ router.post("/", (req, res, next) => {
     });
 }, applyForReimbursement);
 router.get("/", getReimbursements);
+
+// Admin manual routing endpoints
+router.get("/all", requireRole("ADMIN"), getExpenses);
+router.get("/:id/audit-logs", requireRole("ADMIN"), getExpenseAuditLogs);
+router.post("/:id/assign-approvers", requireRole("ADMIN"), assignApprovers);
 
 export default router;
