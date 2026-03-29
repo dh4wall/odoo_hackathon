@@ -11,6 +11,7 @@ interface User {
   role: string;
   email: string;
   name: string;
+   designation?: string | null; 
 }
 
 interface AuthState {
