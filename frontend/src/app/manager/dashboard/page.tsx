@@ -487,45 +487,124 @@ function RequestsTab({
 }
 
 // ─── Settings Tab ─────────────────────────────────────────────────────────────
-function SettingsTab({ user }: { user: any }) {
+function SettingsTab({ user, token }: { user: any; token: string | null }) {
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmNewPassword: "",
+  });
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordForm.newPassword !== passwordForm.confirmNewPassword) {
+      toast.error("New passwords do not match!");
+      return;
+    }
+    try {
+      setIsChangingPassword(true);
+      const res = await axios.put(
+        "http://localhost:5000/api/auth/change-password",
+        { currentPassword: passwordForm.currentPassword, newPassword: passwordForm.newPassword },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success(res.data.message || "Password updated successfully!");
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmNewPassword: "" });
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || "Failed to update password");
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   return (
     <>
-      <header className="mb-8">
+      <header className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-6">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
-          <p className="text-primary font-bold tracking-widest text-[10px] uppercase">Preferences</p>
+          <p className="text-primary font-bold tracking-widest text-[10px] uppercase">Account Controls</p>
           <h2 className="text-4xl font-headline font-extrabold text-on-surface tracking-tighter">Settings</h2>
+          <p className="max-w-md text-on-surface-variant font-medium mt-2">Manage your personal account settings and security credentials.</p>
         </motion.div>
       </header>
-      <section className="bg-surface-container-lowest rounded-2xl p-8 border border-white shadow-sm space-y-6 max-w-xl">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Profile</p>
-          <div className="flex items-center gap-4 p-4 bg-surface-container-low rounded-xl">
-            <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-extrabold text-lg">
-              {user?.name?.charAt(0) ?? "M"}
-            </div>
-            <div>
-              <p className="font-bold text-on-surface">{user?.name ?? "—"}</p>
-              <p className="text-sm text-on-surface-variant">{user?.email ?? "—"}</p>
-              <p className="text-[10px] font-bold uppercase tracking-widest text-primary mt-0.5">{user?.designation ?? "Manager"}</p>
-            </div>
+
+      {/* Profile Card */}
+      <section className="bg-surface-container-lowest rounded-2xl p-6 border border-white shadow-sm max-w-2xl mb-6">
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Profile</p>
+        <div className="flex items-center gap-4 p-4 bg-surface-container-low rounded-xl">
+          <div className="w-12 h-12 rounded-full bg-primary/10 text-primary flex items-center justify-center font-extrabold text-lg">
+            {user?.name?.charAt(0) ?? "M"}
+          </div>
+          <div>
+            <p className="font-bold text-on-surface">{user?.name ?? "—"}</p>
+            <p className="text-sm text-on-surface-variant">{user?.email ?? "—"}</p>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-primary mt-0.5">{user?.designation ?? "Manager"}</p>
           </div>
         </div>
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Notifications</p>
-          {[
-            { label: "Email me on new pending request", on: true  },
-            { label: "Email me when an expense finalises", on: true  },
-            { label: "Digest report every Monday", on: false },
-          ].map((item) => (
-            <div key={item.label} className="flex items-center justify-between py-3 border-b border-outline-variant/10 last:border-0">
-              <span className="text-sm font-medium text-on-surface">{item.label}</span>
-              <span className={`w-8 h-4 rounded-full ${item.on ? "bg-primary" : "bg-slate-300"} relative flex items-center`}>
-                <span className={`w-3 h-3 rounded-full bg-white shadow absolute transition-all ${item.on ? "right-0.5" : "left-0.5"}`} />
-              </span>
-            </div>
-          ))}
+      </section>
+
+      {/* Change Password */}
+      <section className="bg-surface-container-lowest rounded-2xl p-8 border border-white shadow-sm max-w-2xl">
+        <div className="flex items-center gap-4 mb-8 pb-4 border-b border-outline-variant/10">
+          <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+            <span className="material-symbols-outlined">lock_reset</span>
+          </div>
+          <div>
+            <h3 className="text-xl font-headline font-bold text-on-surface">Change Password</h3>
+            <p className="text-sm font-medium text-slate-500">Ensure your account is using a long, random password to stay secure.</p>
+          </div>
         </div>
-        <p className="text-[9px] text-slate-400 uppercase tracking-widest">Settings are display-only in this build.</p>
+
+        <form onSubmit={handlePasswordChange} className="space-y-6">
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Current Password</label>
+            <input
+              required
+              type="password"
+              value={passwordForm.currentPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+              className="w-full bg-surface-container-low text-on-surface px-4 py-3 rounded-xl border-none focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-slate-400 font-medium"
+              placeholder="Enter your current password"
+            />
+          </div>
+
+          <div className="pt-2">
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">
+              New Password <span className="text-[9px] text-slate-400 font-normal lowercase tracking-normal">(min. 6 characters)</span>
+            </label>
+            <input
+              required
+              type="password"
+              minLength={6}
+              value={passwordForm.newPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+              className="w-full bg-surface-container-low text-on-surface px-4 py-3 rounded-xl border-none focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-slate-400 font-medium"
+              placeholder="Enter your new password"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Confirm New Password</label>
+            <input
+              required
+              type="password"
+              minLength={6}
+              value={passwordForm.confirmNewPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, confirmNewPassword: e.target.value })}
+              className="w-full bg-surface-container-low text-on-surface px-4 py-3 rounded-xl border-none focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-slate-400 font-medium"
+              placeholder="Re-enter your new password"
+            />
+          </div>
+
+          <div className="pt-4 flex justify-end">
+            <button
+              type="submit"
+              disabled={isChangingPassword}
+              className="px-8 py-4 bg-primary text-on-primary font-bold tracking-wide rounded-xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-70 disabled:hover:scale-100"
+            >
+              {isChangingPassword ? "Updating..." : "Update Password"}
+            </button>
+          </div>
+        </form>
       </section>
     </>
   );
@@ -533,7 +612,7 @@ function SettingsTab({ user }: { user: any }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 function ManagerDashboardContent() {
-  const { user, logout } = useAuth();
+  const { user, logout, token } = useAuth();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [allRequests, setAllRequests] = useState<ExpenseRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -632,7 +711,7 @@ function ManagerDashboardContent() {
         {activeTab === "dashboard" && <DashboardTab requests={allRequests} user={user} loading={loading} />}
         {activeTab === "pending"   && <RequestsTab requests={allRequests} filterStatus="PENDING" onSelect={setSelected} loading={loading} />}
         {activeTab === "all"       && <RequestsTab requests={allRequests} onSelect={setSelected} loading={loading} />}
-        {activeTab === "settings"  && <SettingsTab user={user} />}
+        {activeTab === "settings"  && <SettingsTab user={user} token={token} />}
 
         <footer className="mt-20 py-12 border-t border-slate-100 flex flex-col items-center gap-6">
           <div className="flex gap-8 text-[10px] font-bold uppercase tracking-widest text-slate-400">
