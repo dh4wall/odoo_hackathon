@@ -24,6 +24,8 @@ interface ExpenseRequest {
   expense_date: string;
   amount: number;
   currency: string;
+  submitted_amount?: number;
+  submitted_currency?: string;
   category: string;
   description: string;
   receipt_url: string | null;
@@ -110,6 +112,11 @@ function ActionModal({ request, onClose, onAction }: ActionModalProps) {
             <p className="font-extrabold text-on-surface text-xl font-headline">
               {Number(request.amount).toLocaleString("en-US", { style: "currency", currency: safeCurrency(request.currency) })}
             </p>
+            {request.submitted_currency && request.currency !== request.submitted_currency && (
+              <p className="text-[10px] text-slate-500 font-medium tracking-wide mt-1">
+                Converted from {Number(request.submitted_amount).toLocaleString("en-US", { style: "currency", currency: safeCurrency(request.submitted_currency) })}
+              </p>
+            )}
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Category</p>

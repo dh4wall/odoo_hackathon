@@ -23,7 +23,7 @@ function EmployeeDashboardContent() {
     category: "",
     paidBy: "Personal Card",
     amount: "",
-    currency: "$",
+    currency: "USD",
     remarks: "",
     receiptFile: null as File | null,
   });
@@ -56,6 +56,28 @@ function EmployeeDashboardContent() {
       fetchReimbursements();
     }
   }, [activeTab, token]);
+
+  const [currencies, setCurrencies] = useState<string[]>(["USD", "EUR", "GBP", "INR"]);
+
+  // Mount API load for global currencies
+  useEffect(() => {
+    async function fetchCurrencies() {
+      try {
+        const res = await axios.get("https://restcountries.com/v3.1/all?fields=name,currencies");
+        const currSet = new Set<string>(["USD", "EUR", "GBP", "INR"]); // Safety defaults
+        
+        res.data.forEach((country: any) => {
+          if (country.currencies) {
+            Object.keys(country.currencies).forEach(c => currSet.add(c));
+          }
+        });
+        setCurrencies(Array.from(currSet).sort());
+      } catch (err) {
+        console.error("Failed to load global REST currencies", err);
+      }
+    }
+    fetchCurrencies();
+  }, []);
 
   const navTabs = [
     { id: "dashboard", icon: "dashboard", label: "Dashboard" },
@@ -101,7 +123,7 @@ function EmployeeDashboardContent() {
         category: "",
         paidBy: "Personal Card",
         amount: "",
-        currency: "$",
+        currency: "USD",
         remarks: "",
         receiptFile: null,
       });
@@ -434,10 +456,9 @@ function EmployeeDashboardContent() {
                                 onChange={(e) => setReimbForm({...reimbForm, currency: e.target.value})} 
                                 className="bg-surface-container-low border-r border-outline-variant/10 text-on-surface px-4 py-3 rounded-l-xl focus:ring-2 focus:ring-primary outline-none transition-all appearance-none"
                               >
-                                <option value="$">US Dollar ($)</option>
-                                <option value="Rs">Indian Rupee (Rs)</option>
-                                <option value="€">Euro (€)</option>
-                                <option value="£">British Pound (£)</option>
+                                {currencies.map(c => (
+                                  <option key={c} value={c}>{c}</option>
+                                ))}
                               </select>
                               <input 
                                 required 

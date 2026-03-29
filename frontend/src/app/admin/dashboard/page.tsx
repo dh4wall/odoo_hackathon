@@ -486,8 +486,17 @@ function DashboardContent() {
                               <span className="text-xs text-slate-400">{e.category} • {new Date(e.date).toLocaleDateString()}</span>
                             </div>
                           </td>
-                          <td className="py-4 px-4 font-bold text-slate-600">
-                            {Number(e.amount).toLocaleString()} {e.currency}
+                          <td className="py-4 px-4">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-slate-600">
+                                {Number(e.amount_in_base || e.amount).toLocaleString()} {e.base_currency || e.currency}
+                              </span>
+                              {(e.currency && e.base_currency && e.currency !== e.base_currency) && (
+                                <span className="text-[10px] text-slate-400 font-medium mt-0.5">
+                                  Original: {Number(e.amount).toLocaleString()} {e.currency}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-4 px-4">
                             <span className="text-sm font-medium">{e.submitted_by_name}</span>
