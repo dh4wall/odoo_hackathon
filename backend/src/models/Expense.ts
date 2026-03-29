@@ -29,12 +29,31 @@ export const createExpense = async (
     currency: string,
     receipt_url: string
 ): Promise<Expense> => {
-    // For simplicity, auto-converting to base is skipped or mocked
-    const amount_in_base = amount;
-    const base_currency = currency;
-    const exchange_rate = 1.0;
-
     try {
+        // Query the Company payload to calculate target base currency
+        const companyRes = await pool.query('SELECT base_currency FROM companies WHERE id = $1', [company_id]);
+        const base_currency = companyRes.rows[0]?.base_currency || 'USD';
+
+        let exchange_rate = 1.0;
+        let amount_in_base = amount;
+
+        // Perform external live math if currencies mistmach
+        if (currency && currency !== base_currency) {
+            try {
+                const res = await fetch(`https://api.exchangerate-api.com/v4/latest/${base_currency}`);
+                if (res.ok) {
+                    const data = await res.json() as any;
+                    if (data && data.rates && data.rates[currency]) {
+                        exchange_rate = data.rates[currency];
+                        // "1 Base = N File Currency", thus Base = File / N
+                        amount_in_base = Math.round((amount / exchange_rate) * 100) / 100;
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to ping exchange rate API. Falling back to 1.0", err);
+            }
+        }
+
         const result = await pool.query(
             `INSERT INTO expenses (
         id, company_id, submitted_by_id, description, category, date, 
@@ -55,10 +74,20 @@ export const createExpense = async (
 export const findExpensesByUserId = async (user_id: string): Promise<Expense[]> => {
     try {
         const result = await pool.query(
-            `SELECT * FROM expenses WHERE submitted_by_id = $1 ORDER BY created_at DESC`,
+            `SELECT e.*, 
+               (
+                 SELECT comment 
+                 FROM approval_steps s 
+                 WHERE s.expense_id = e.id AND s.status = 'REJECTED' AND s.comment IS NOT NULL
+                 ORDER BY s.sequence DESC 
+                 LIMIT 1
+               ) as rejection_comment
+             FROM expenses e 
+             WHERE e.submitted_by_id = $1 
+             ORDER BY e.created_at DESC`,
             [user_id]
         );
-        return result.rows as Expense[];
+        return result.rows as (Expense & { rejection_comment?: string })[];
     } catch (error) {
         console.error("Error finding expenses for user:", error);
         throw error;
