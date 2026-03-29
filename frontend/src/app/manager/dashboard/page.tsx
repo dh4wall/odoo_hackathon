@@ -127,19 +127,30 @@ function ActionModal({ request, onClose, onAction }: ActionModalProps) {
 
         {/* Receipt */}
         <div className="mb-5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Receipt / Attachment</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Receipt / Attachment</p>
+            {request.receipt_url && (request.receipt_url.startsWith("data:application/pdf") || request.receipt_url.startsWith("blob:")) && (
+              <a
+                href={request.receipt_url}
+                download={`receipt_${request.id}.pdf`}
+                className="text-[10px] font-bold uppercase tracking-widest text-white bg-green-500 hover:bg-green-600 px-3 py-1 rounded-md transition-all shadow-sm flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-[14px]">download</span> Download PDF
+              </a>
+            )}
+          </div>
           {request.receipt_url ? (
-            <div className="relative rounded-2xl overflow-hidden border border-outline-variant/10 h-48">
-              {request.receipt_url.startsWith("data:application/pdf") || request.receipt_url.startsWith("blob:") ? (
-                <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50 gap-3">
-                  <span className="material-symbols-outlined text-5xl text-red-400">picture_as_pdf</span>
-                  <a
-                    href={request.receipt_url} target="_blank" rel="noopener noreferrer"
-                    className="text-primary text-xs font-bold underline underline-offset-2"
-                  >
-                    Open PDF Receipt
-                  </a>
-                </div>
+            <div className={`relative rounded-2xl overflow-hidden border border-outline-variant/10 ${
+              (request.receipt_url.startsWith("data:application/pdf") || request.receipt_url.startsWith("blob:")) 
+                ? 'h-[500px]' 
+                : 'h-48'
+            }`}>
+              {(request.receipt_url.startsWith("data:application/pdf") || request.receipt_url.startsWith("blob:")) ? (
+                <iframe 
+                  src={request.receipt_url} 
+                  className="w-full h-full border-0 bg-slate-50" 
+                  title="PDF Receipt Viewer"
+                />
               ) : (
                 <>
                   <img src={request.receipt_url} alt="Receipt" className="w-full h-full object-cover" />
