@@ -130,7 +130,7 @@ function ActionModal({ request, onClose, onAction }: ActionModalProps) {
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Receipt / Attachment</p>
           {request.receipt_url ? (
             <div className="relative rounded-2xl overflow-hidden border border-outline-variant/10 h-48">
-              {request.receipt_url.startsWith("data:application/pdf") ? (
+              {request.receipt_url.startsWith("data:application/pdf") || request.receipt_url.startsWith("blob:") ? (
                 <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50 gap-3">
                   <span className="material-symbols-outlined text-5xl text-red-400">picture_as_pdf</span>
                   <a
@@ -664,8 +664,12 @@ function ManagerDashboardContent() {
 
         <div className="px-4 mb-6">
           <div className="flex items-center gap-3 p-3 rounded-xl bg-white/50 backdrop-blur-sm shadow-sm border border-white">
-            <div className="w-10 h-10 rounded-full bg-primary/10 ring-2 ring-primary/10 flex items-center justify-center text-primary font-extrabold">
-              {user?.name?.charAt(0) ?? "M"}
+            <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-container-high ring-2 ring-primary/10">
+              <img 
+                alt="User profile" 
+                className="w-full h-full object-cover" 
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuAe-rpX2Vn6cejqzTAM7KAV8BDLKFNLv3rYxDa_Tex412nHCBy05aMUPSxr9v99at7ukf6cXU8nib34pWvTtfv2q0Zo03LZBhAWW1Yc1FiQj30vyl-J0mx0CpkID7gdkO51BqhMDIyL6TopvVOyogjCSAcLUu6s0fjkFqZpIBqI7CH7LvdqJy0NXZgklWqpRCRWyGH04TVjCV1mfZSohu3rY3S_c1E80ALKRmy3D-GeTPp6lGvQh0xg04-Fuz6zu9yQBc22cbdz11M" 
+              />
             </div>
             <div className="flex flex-col overflow-hidden">
               <span className="font-bold text-on-surface truncate">{user?.name ?? "Manager"}</span>
