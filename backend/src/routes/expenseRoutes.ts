@@ -26,7 +26,14 @@ const upload = multer({
 // Protect all expense routes
 router.use(authMiddleware);
 
-router.post("/", upload.single("receiptFile"), applyForReimbursement);
+router.post("/", (req, res, next) => {
+    upload.single("receiptFile")(req, res, (err) => {
+        if (err) {
+            return res.status(400).json({ error: err.message });
+        }
+        next();
+    });
+}, applyForReimbursement);
 router.get("/", getReimbursements);
 
 export default router;
