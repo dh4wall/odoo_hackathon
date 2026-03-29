@@ -365,8 +365,22 @@ function DashboardTab({ requests, user, loading }: { requests: ExpenseRequest[];
       </div>
       <section className="bg-surface-container-lowest rounded-2xl border border-white shadow-sm overflow-hidden mb-12">
         {loading ? (
-          <div className="flex items-center justify-center h-32">
-            <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+          <div className="divide-y divide-outline-variant/5">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex items-center justify-between px-6 py-4 animate-pulse">
+                <div className="flex items-center gap-4">
+                  <div className="w-9 h-9 rounded-full bg-slate-100 shrink-0" />
+                  <div className="space-y-1.5">
+                    <div className="h-3.5 bg-slate-100 rounded-full w-28" />
+                    <div className="h-3 bg-slate-100 rounded-full w-40" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-6">
+                  <div className="h-3.5 bg-slate-100 rounded-full w-20" />
+                  <div className="h-5 bg-slate-100 rounded w-16" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : requests.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -440,8 +454,22 @@ function RequestsTab({
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center h-48">
-            <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+          <div className="divide-y divide-slate-50">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="grid grid-cols-[2fr_1.2fr_1fr_1fr_auto] gap-4 items-center px-6 py-4 animate-pulse">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-slate-100 shrink-0" />
+                  <div className="space-y-1.5 flex-1">
+                    <div className="h-3.5 bg-slate-100 rounded-full w-3/4" />
+                    <div className="h-3 bg-slate-100 rounded-full w-1/2" />
+                  </div>
+                </div>
+                <div className="h-3.5 bg-slate-100 rounded-full w-24" />
+                <div className="h-3.5 bg-slate-100 rounded-full w-16" />
+                <div className="h-5 bg-slate-100 rounded w-16" />
+                <div className="h-7 bg-slate-100 rounded-lg w-20" />
+              </div>
+            ))}
           </div>
         ) : displayed.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">

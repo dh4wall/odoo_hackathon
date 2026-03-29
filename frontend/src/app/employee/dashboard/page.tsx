@@ -317,9 +317,18 @@ function EmployeeDashboardContent() {
                   </thead>
                   <tbody>
                     {isLoadingReimb ? (
-                      <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-500 font-medium">Loading reimbursements...</td>
-                      </tr>
+                      <>
+                        {[...Array(4)].map((_, i) => (
+                          <tr key={i} className="border-b border-outline-variant/10">
+                            <td className="py-4 pr-4"><div className="h-4 bg-slate-100 rounded-full w-32 animate-pulse" /></td>
+                            <td className="py-4 px-4"><div className="h-4 bg-slate-100 rounded-full w-16 animate-pulse" /></td>
+                            <td className="py-4 px-4"><div className="h-4 bg-slate-100 rounded-full w-20 animate-pulse" /></td>
+                            <td className="py-4 px-4"><div className="h-4 bg-slate-100 rounded-full w-16 animate-pulse" /></td>
+                            <td className="py-4 px-4"><div className="h-5 bg-slate-100 rounded w-14 animate-pulse" /></td>
+                            <td className="py-4 pl-4"><div className="h-4 bg-slate-100 rounded-full w-16 animate-pulse" /></td>
+                          </tr>
+                        ))}
+                      </>
                     ) : reimbursements.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="py-8 text-center text-slate-500 font-medium">No applications found.</td>
