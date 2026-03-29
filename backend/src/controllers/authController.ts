@@ -1,54 +1,63 @@
 import { Response } from "express";
 import { AuthRequest } from "../middleware/auth";
-import { findUserByEmail, createCompanyAndAdmin, findUserById } from "../models/User";
+import {
+  findUserByEmail,
+  createCompanyAndAdmin,
+  findUserById,
+  findCompanyById,
+} from "../models/User";
 import { hashPassword, comparePassword, generateToken } from "../utils/auth";
+import { getCurrencyForCountry } from "../services/countryService";
 
 export const signup = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    console.log("Received signup request:", req.body);
-    const { email, password, name, company_name } = req.body;
+    const { email, password, name, company_name, country_code } = req.body;
 
-    if (!email || !password || !name || !company_name) {
-      console.log("Missing fields");
-      res
-        .status(400)
-        .json({
-          error: "Email, password, name, and company_name are required",
-          message: "Email, password, name, and company_name are required"
-        });
-      return;
-    }
-
-    console.log("Checking existing user...");
-    const existingUser = await findUserByEmail(email);
-    if (existingUser) {
-      console.log("User exists");
-      res.status(409).json({
-        error: "User already exists",
-        message: "User already exists"
+    if (!email || !password || !name || !company_name || !country_code) {
+      res.status(400).json({
+        error: "email, password, name, company_name, and country_code are required",
       });
       return;
     }
 
-    console.log("Hashing password...");
+    const existingUser = await findUserByEmail(email);
+    if (existingUser) {
+      res.status(409).json({ error: "A user with this email already exists" });
+      return;
+    }
+
+    let currency: string;
+    try {
+      currency = await getCurrencyForCountry(country_code);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message || "Invalid country code" });
+      return;
+    }
+
     const hashedPassword = await hashPassword(password);
 
-    console.log("Creating company and user in DB...");
-    const { user } = await createCompanyAndAdmin(company_name, email, hashedPassword, name);
+    const { user } = await createCompanyAndAdmin(
+      company_name,
+      email,
+      hashedPassword,
+      name,
+      currency,
+      country_code.toUpperCase()
+    );
 
-    console.log("Generating token...");
-    const token = generateToken(user.id);
+    const token = generateToken(user.id, user.role, user.company_id);
 
-    console.log("Success!");
     res.status(201).json({
-      message: "User and Company created successfully",
+      message: "Company and Admin account created successfully",
       token,
       user: {
         id: user.id,
-        email: user.email,
         name: user.name,
+        email: user.email,
         role: user.role,
-        company_id: user.company_id
+        company_id: user.company_id,
+        currency,
+        country_code: country_code.toUpperCase(),
       },
     });
   } catch (error) {
@@ -62,42 +71,37 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      res.status(400).json({
-        error: "Email and password are required",
-        message: "Email and password are required"
-      });
+      res.status(400).json({ error: "Email and password are required" });
       return;
     }
 
     const user = await findUserByEmail(email);
     if (!user) {
-      res.status(401).json({
-        error: "Invalid credentials",
-        message: "Invalid credentials"
-      });
+      res.status(401).json({ error: "Invalid credentials" });
       return;
     }
 
     const isPasswordValid = await comparePassword(password, user.password_hash);
     if (!isPasswordValid) {
-      res.status(401).json({
-        error: "Invalid credentials",
-        message: "Invalid credentials"
-      });
+      res.status(401).json({ error: "Invalid credentials" });
       return;
     }
 
-    const token = generateToken(user.id);
+    const company = await findCompanyById(user.company_id);
+    const token = generateToken(user.id, user.role, user.company_id);
 
     res.json({
       message: "Login successful",
       token,
       user: {
         id: user.id,
-        email: user.email,
         name: user.name,
+        email: user.email,
         role: user.role,
-        company_id: user.company_id
+        designation: user.designation,
+        company_id: user.company_id,
+        currency: company?.currency,
+        country_code: company?.country_code,
       },
     });
   } catch (error) {
@@ -106,39 +110,40 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
   }
 };
 
-export const getProfile = async (
-  req: AuthRequest,
-  res: Response
-): Promise<void> => {
+export const logout = async (_req: AuthRequest, res: Response): Promise<void> => {
+  res.json({ message: "Logged out successfully" });
+};
+
+export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.userId) {
-      res.status(401).json({
-        error: "Unauthorized",
-        message: "Unauthorized"
-      });
+      res.status(401).json({ error: "Unauthorized" });
       return;
     }
 
     const user = await findUserById(req.userId);
     if (!user) {
-      res.status(404).json({
-        error: "User not found",
-        message: "User found"
-      });
+      res.status(404).json({ error: "User not found" });
       return;
     }
+
+    const company = await findCompanyById(user.company_id);
 
     res.json({
       user: {
         id: user.id,
-        email: user.email,
         name: user.name,
+        email: user.email,
         role: user.role,
-        company_id: user.company_id
+        designation: user.designation,
+        company_id: user.company_id,
+        currency: company?.currency,
+        country_code: company?.country_code,
+        company_name: company?.name,
       },
     });
   } catch (error) {
-    console.error("Get profile error:", error);
+    console.error("Get me error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 };

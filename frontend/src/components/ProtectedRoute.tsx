@@ -4,16 +4,27 @@ import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
-export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+export function ProtectedRoute({ 
+  children, 
+  allowedRoles 
+}: { 
+  children: React.ReactNode;
+  allowedRoles?: string[];
+}) {
+  const { user, isAuthenticated, isLoading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+    if (!isLoading) {
+      if (!isAuthenticated) {
+        router.push(`/login?redirect=${encodeURIComponent(pathname)}`);
+      } else if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+        // Redirect somewhere safe if they try to access a page they aren't authorized for
+        router.push("/dashboard");
+      }
     }
-  }, [isLoading, isAuthenticated, router, pathname]);
+  }, [isLoading, isAuthenticated, router, pathname, allowedRoles, user]);
 
   if (isLoading) {
     return (
@@ -28,6 +39,17 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   if (!isAuthenticated) {
     return null; // Will redirect in useEffect
+  }
+
+  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background text-center p-8">
+        <div>
+          <h1 className="text-4xl text-error font-bold mb-4 font-headline">403 Forbidden</h1>
+          <p className="text-slate-500 font-medium tracking-tight">You do not have permission to view this page.</p>
+        </div>
+      </div>
+    );
   }
 
   return <>{children}</>;

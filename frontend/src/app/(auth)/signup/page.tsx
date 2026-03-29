@@ -13,6 +13,8 @@ export default function Signup() {
   const [companyName, setCompanyName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [countryCode, setCountryCode] = useState("US");
+  const [countries, setCountries] = useState<{cca2: string, name: string, currency: string}[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const router = useRouter();
@@ -28,6 +30,33 @@ export default function Signup() {
     setStrength(s);
   }, [password]);
 
+  useEffect(() => {
+    const fetchCountries = async () => {
+      try {
+        const res = await axios.get("https://restcountries.com/v3.1/all?fields=name,cca2,currencies");
+        const formatted = res.data.map((c: any) => {
+          const currencyObj = c.currencies ? Object.values(c.currencies)[0] as {name: string, symbol: string} : null;
+          const currencyKey = c.currencies ? Object.keys(c.currencies)[0] : null;
+          return {
+            cca2: c.cca2,
+            name: c.name.common,
+            currency: currencyKey ? `${currencyKey} (${currencyObj?.symbol || ''})` : 'N/A'
+          };
+        }).sort((a: any, b: any) => a.name.localeCompare(b.name));
+        
+        // Put a few default entries at the top
+        const defaultCodes = ["US", "GB", "IN"];
+        const topCountries = formatted.filter((c: any) => defaultCodes.includes(c.cca2));
+        const otherCountries = formatted.filter((c: any) => !defaultCodes.includes(c.cca2));
+        
+        setCountries([...topCountries, ...otherCountries]);
+      } catch (err) {
+        console.error("Failed to load countries");
+      }
+    };
+    fetchCountries();
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -38,6 +67,7 @@ export default function Signup() {
         password,
         name: fullName,
         company_name: companyName,
+        country_code: countryCode
       });
 
       toast.success("Welcome to Aura Hack!");
@@ -131,6 +161,29 @@ export default function Signup() {
 
             {/* Main Form */}
             <form className="space-y-4" onSubmit={handleSubmit}>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant ml-0.5" htmlFor="country">Country</label>
+                <div className="relative">
+                  <select 
+                    id="country" 
+                    value={countryCode} 
+                    onChange={(e) => setCountryCode(e.target.value)} 
+                    className="w-full bg-surface-container-lowest border border-outline-variant/10 rounded-lg px-3.5 py-2.5 text-sm text-on-surface focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all duration-200 outline-none font-medium appearance-none"
+                    required
+                  >
+                    <option value="" disabled>Select Country</option>
+                    {countries.map(c => (
+                      <option key={c.cca2} value={c.cca2}>{c.name}</option>
+                    ))}
+                  </select>
+                  <span className="material-symbols-outlined absolute right-3.5 top-2.5 text-outline/20 text-[20px] pointer-events-none">public</span>
+                </div>
+                {countryCode && (
+                  <p className="text-[10px] text-primary font-bold uppercase tracking-widest pl-1 pt-1 opacity-80">
+                    Company Currency code: {countries.find(c => c.cca2 === countryCode)?.currency}
+                  </p>
+                )}
+              </div>
               <div className="space-y-1">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant ml-0.5" htmlFor="companyName">Company Name</label>
                 <div className="relative">

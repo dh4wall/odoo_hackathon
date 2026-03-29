@@ -3,6 +3,8 @@ import { verifyToken } from "../utils/auth";
 
 export interface AuthRequest extends Request {
   userId?: string;
+  role?: string;
+  companyId?: string;
 }
 
 export const authMiddleware = (
@@ -24,7 +26,23 @@ export const authMiddleware = (
   }
 
   req.userId = decoded.userId;
+  req.role = decoded.role;
+  req.companyId = decoded.companyId;
   next();
+};
+
+/**
+ * Role guard factory — place AFTER authMiddleware.
+ * Usage: router.get('/admin-only', authMiddleware, requireRole('ADMIN'), handler)
+ */
+export const requireRole = (...roles: string[]) => {
+  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+    if (!req.role || !roles.includes(req.role)) {
+      res.status(403).json({ error: "Forbidden: insufficient permissions" });
+      return;
+    }
+    next();
+  };
 };
 
 export const optionalAuthMiddleware = (
@@ -38,6 +56,8 @@ export const optionalAuthMiddleware = (
     const decoded = verifyToken(token);
     if (decoded) {
       req.userId = decoded.userId;
+      req.role = decoded.role;
+      req.companyId = decoded.companyId;
     }
   }
 
