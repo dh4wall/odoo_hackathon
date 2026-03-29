@@ -110,7 +110,7 @@ export const processAction = async (req: AuthRequest, res: Response): Promise<vo
 
     // 1. Lock the active Step and the Expense safely
     const stepRes = await client.query(
-      `SELECT id, sequence FROM approval_steps 
+      `SELECT id, sequence, is_priority FROM approval_steps 
        WHERE expense_id = $1 AND approver_id = $2 AND status = 'PENDING' 
        FOR UPDATE`,
       [expenseId, userId]
@@ -124,6 +124,17 @@ export const processAction = async (req: AuthRequest, res: Response): Promise<vo
 
     const currentStep = stepRes.rows[0];
 
+    // Read the ad-hoc approval rule attached to this expense
+    const ruleRes = await client.query(
+      `SELECT r.rule_type, r.threshold_pct 
+       FROM expenses e 
+       LEFT JOIN approval_rules r ON e.approval_rule_id = r.id 
+       WHERE e.id = $1`,
+      [expenseId]
+    );
+    const rule = ruleRes.rows[0];
+    const isPriorityApprover = currentStep.is_priority === true;
+
     // 2. Resolve the action onto the active Step
     await client.query(
       `UPDATE approval_steps SET status = $1, comment = $2, acted_at = NOW() WHERE id = $3`,
@@ -136,15 +147,32 @@ export const processAction = async (req: AuthRequest, res: Response): Promise<vo
       [expenseId, userId, action, note || null]
     );
 
-    if (action === "REJECTED") {
-      // Rejecting halts the entire sequence permanently
-      await client.query(`UPDATE expenses SET status = 'REJECTED', updated_at = NOW() WHERE id = $1`, [expenseId]);
+    // ────────────────────────────────────────────────────────────────────────
+    // MATRIX BRANCH 1: KEY APPROVER OVERRIDE (FAST-TRACK)
+    if (isPriorityApprover) {
+      // They instantly trigger the global expense status 
+      await client.query(`UPDATE expenses SET status = $1, updated_at = NOW() WHERE id = $2`, [action, expenseId]);
+      
+      // Cancel any remaining steps
+      await client.query(
+        `UPDATE approval_steps SET status = 'SKIPPED' WHERE expense_id = $1 AND status IN ('PENDING', 'LOCKED')`, 
+        [expenseId]
+      );
+      
+      await client.query(
+        `INSERT INTO audit_logs (expense_id, actor_id, action, comment) VALUES ($1, $2, $3, $4)`,
+        [expenseId, userId, 'PRIORITY_OVERRIDE', `Key Approver directly finalized the expense as ${action}.`]
+      );
+      
       await client.query("COMMIT");
-      res.json({ message: "Expense rejected successfully" });
+      res.json({ message: `Expense ${action.toLowerCase()} permanently via priority override.` });
       return;
     }
 
-    // ACTION === 'APPROVED' => Check if there's a subsequent manager in the sequence!
+    // ────────────────────────────────────────────────────────────────────────
+    // MATRIX BRANCH 2: NORMAL MANAGER PERCENTAGE FLOW
+    
+    // Irrespective of Approve/Reject, attempt to find the next manager sequentially!
     const nextStepRes = await client.query(
       `SELECT id, approver_id, sequence FROM approval_steps 
        WHERE expense_id = $1 AND sequence > $2 
@@ -153,7 +181,7 @@ export const processAction = async (req: AuthRequest, res: Response): Promise<vo
     );
 
     if (nextStepRes.rows.length > 0) {
-      // 3a. Move to Next Manager
+      // Move to Next Manager independently of the current decision
       const nextStepId = nextStepRes.rows[0].id;
       const nextSequence = nextStepRes.rows[0].sequence;
       await client.query(`UPDATE approval_steps SET status = 'PENDING' WHERE id = $1`, [nextStepId]);
@@ -164,19 +192,29 @@ export const processAction = async (req: AuthRequest, res: Response): Promise<vo
       );
       
       await client.query("COMMIT");
-      res.json({ message: "Expense approved and securely routed to the next manager." });
+      res.json({ message: "Your decision is recorded. Routed to the next manager." });
       return;
     } else {
-      // 3b. Final Approver reached -> Globally Approve Expense
-      await client.query(`UPDATE expenses SET status = 'APPROVED', updated_at = NOW() WHERE id = $1`, [expenseId]);
+      // 3. Final Approver reached -> Calculate mathematically!
+      const allStepsRes = await client.query(`SELECT status FROM approval_steps WHERE expense_id = $1`, [expenseId]);
+      
+      const total = allStepsRes.rows.length;
+      const approvedCount = allStepsRes.rows.filter((s: any) => s.status === 'APPROVED').length;
+      
+      const ratio = (approvedCount / total) * 100;
+      const threshold = rule && rule.threshold_pct ? Number(rule.threshold_pct) : 60.00;
+
+      const finalStatus = ratio >= threshold ? 'APPROVED' : 'REJECTED';
+
+      await client.query(`UPDATE expenses SET status = $1, updated_at = NOW() WHERE id = $2`, [finalStatus, expenseId]);
       
       await client.query(
         `INSERT INTO audit_logs (expense_id, actor_id, action, comment) VALUES ($1, $2, $3, $4)`,
-        [expenseId, userId, 'FINAL_APPROVED', `Expense multi-step routing finalized.`]
+        [expenseId, userId, 'FINAL_EVALUATION', `Sequence resolved mathematically: ${ratio.toFixed(1)}% Approved (Threshold: ${threshold}%). Outcome: ${finalStatus}`]
       );
 
       await client.query("COMMIT");
-      res.json({ message: "Expense fully approved!" });
+      res.json({ message: `Expense fully resolved mathematically (${finalStatus}).` });
       return;
     }
 

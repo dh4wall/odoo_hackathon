@@ -122,7 +122,7 @@ export const assignApprovers = async (req: AuthRequest, res: Response): Promise<
   try {
     const { companyId } = req;
     const { id } = req.params;
-    const { approverIds } = req.body;
+    const { approverIds, priorityApproverIds = [] } = req.body;
 
     if (!companyId) {
       res.status(401).json({ error: "Unauthorized" });
@@ -138,7 +138,7 @@ export const assignApprovers = async (req: AuthRequest, res: Response): Promise<
 
     // Block unless expense is DRAFT or PENDING
     const expRes = await client.query(
-      "SELECT id, status FROM expenses WHERE id = $1 AND company_id = $2 FOR UPDATE",
+      "SELECT id, status, category FROM expenses WHERE id = $1 AND company_id = $2 FOR UPDATE",
       [id, companyId]
     );
 
@@ -155,6 +155,23 @@ export const assignApprovers = async (req: AuthRequest, res: Response): Promise<
       return;
     }
 
+    // Insert into approval_rules dynamically mapping to this individual expense sequence
+    const ruleRes = await client.query(
+      `INSERT INTO approval_rules (company_id, name, category, rule_type, threshold_pct, key_approver_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id`,
+      [
+        companyId, 
+        `Manual Sequence - ${id.slice(0, 8)}`, 
+        expense.category, 
+        priorityApproverIds.length > 0 ? 'HYBRID' : 'PERCENTAGE', 
+        60.00, 
+        null
+      ]
+    );
+
+    const customRuleId = ruleRes.rows[0].id;
+
     // Delete any existing steps
     await client.query("DELETE FROM approval_steps WHERE expense_id = $1", [id]);
 
@@ -162,15 +179,19 @@ export const assignApprovers = async (req: AuthRequest, res: Response): Promise<
     for (let i = 0; i < approverIds.length; i++) {
       // First is PENDING, rest are LOCKED
       const stepStatus = i === 0 ? "PENDING" : "LOCKED";
+      const isPriority = priorityApproverIds.includes(approverIds[i]);
       await client.query(
-        `INSERT INTO approval_steps (expense_id, approver_id, sequence, status) 
-         VALUES ($1, $2, $3, $4)`,
-        [id, approverIds[i], i + 1, stepStatus]
+        `INSERT INTO approval_steps (expense_id, approver_id, sequence, status, is_priority) 
+         VALUES ($1, $2, $3, $4, $5)`,
+        [id, approverIds[i], i + 1, stepStatus, isPriority]
       );
     }
 
-    // Update expense status to PENDING
-    await client.query("UPDATE expenses SET status = 'PENDING', updated_at = NOW() WHERE id = $1", [id]);
+    // Update expense status to PENDING and lock the ad-hoc rule
+    await client.query(
+      `UPDATE expenses SET status = 'PENDING', approval_rule_id = $2, updated_at = NOW() WHERE id = $1`, 
+      [id, customRuleId]
+    );
 
     // Also write to audit_logs
     await client.query(

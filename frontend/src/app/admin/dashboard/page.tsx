@@ -49,6 +49,14 @@ function DashboardContent() {
   const [isRouteModalOpen, setIsRouteModalOpen] = useState(false);
   const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null);
   const [routeApprovers, setRouteApprovers] = useState<string[]>([]);
+  const [priorityApprovers, setPriorityApprovers] = useState<string[]>([]);
+
+  // Oversight State
+  const [isOversightModalOpen, setIsOversightModalOpen] = useState(false);
+  const [selectedOversightExp, setSelectedOversightExp] = useState<any | null>(null);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [isLogsLoading, setIsLogsLoading] = useState(false);
+  const [oversightFilters, setOversightFilters] = useState({ status: "", category: "", search: "" });
 
   const fetchUsers = async () => {
     try {
@@ -65,7 +73,7 @@ function DashboardContent() {
   const fetchExpenses = async () => {
     try {
       setIsLoadingExpenses(true);
-      const res = await axios.get("http://localhost:5000/api/expenses");
+      const res = await axios.get("http://localhost:5000/api/expenses/all", { withCredentials: true });
       setExpenses(res.data);
     } catch (err: any) {
       toast.error(err.response?.data?.error || "Failed to fetch applications");
@@ -77,7 +85,7 @@ function DashboardContent() {
   useEffect(() => {
     if (user?.role === "ADMIN") {
       if (activeTab === "users") fetchUsers();
-      if (activeTab === "applications") {
+      if (activeTab === "applications" || activeTab === "oversight") {
         fetchExpenses();
         if (users.length === 0) fetchUsers();
       }
@@ -143,16 +151,39 @@ function DashboardContent() {
     if (!selectedExpenseId) return;
     try {
       await axios.post(`http://localhost:5000/api/expenses/${selectedExpenseId}/assign-approvers`, {
-        approverIds: routeApprovers
-      });
+        approverIds: routeApprovers,
+        priorityApproverIds: priorityApprovers
+      }, { withCredentials: true });
       toast.success("Approval route assigned successfully!");
       setIsRouteModalOpen(false);
       setRouteApprovers([]);
+      setPriorityApprovers([]);
       fetchExpenses();
     } catch (err: any) {
       toast.error(err.response?.data?.error || "Failed to assign route");
     }
   };
+
+  const openOversightModal = async (exp: any) => {
+    setSelectedOversightExp(exp);
+    setIsOversightModalOpen(true);
+    try {
+      setIsLogsLoading(true);
+      const res = await axios.get(`http://localhost:5000/api/expenses/${exp.id}/audit-logs`, { withCredentials: true });
+      setAuditLogs(res.data);
+    } catch (err) {
+      toast.error("Failed to load audit trail");
+    } finally {
+      setIsLogsLoading(false);
+    }
+  };
+
+  const filteredOversight = expenses.filter(e => {
+    if (oversightFilters.status && e.status !== oversightFilters.status) return false;
+    if (oversightFilters.category && e.category !== oversightFilters.category) return false;
+    if (oversightFilters.search && !e.submitted_by_name?.toLowerCase().includes(oversightFilters.search.toLowerCase())) return false;
+    return true;
+  });
 
   const managers = users.filter((u) => u.role === "MANAGER");
 
@@ -166,6 +197,7 @@ function DashboardContent() {
   if (user?.role === "ADMIN") {
     navTabs.push({ id: "users", icon: "manage_accounts", label: "User Management" });
     navTabs.push({ id: "applications", icon: "assignment", label: "Applications" });
+    navTabs.push({ id: "oversight", icon: "visibility", label: "Oversight History" });
   }
 
   return (
@@ -471,7 +503,7 @@ function DashboardContent() {
                             </span>
                           </td>
                           <td className="py-4 pl-4 text-right">
-                            {(e.status === "DRAFT" || e.status === "PENDING") && (
+                            {e.status === "DRAFT" ? (
                               <button 
                                 onClick={() => openRouteModal(e.id)}
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface-container-low hover:bg-primary hover:text-white text-primary text-xs font-bold rounded-lg transition-colors"
@@ -479,6 +511,11 @@ function DashboardContent() {
                                 <span className="material-symbols-outlined text-[16px]">route</span>
                                 Assign Route
                               </button>
+                            ) : (
+                              <span className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-outline-variant/20 inline-flex items-center gap-1.5">
+                                <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                                Routed
+                              </span>
                             )}
                           </td>
                         </tr>
@@ -520,7 +557,9 @@ function DashboardContent() {
                                     <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
                                       {idx + 1}
                                     </div>
-                                    <span className="text-sm font-bold text-slate-700">{mgr?.name}</span>
+                                    <span className="text-sm font-bold text-slate-700">
+                                      {mgr?.name} <span className="ml-1 text-xs font-medium text-slate-400">({mgr?.designation || 'Manager'})</span>
+                                    </span>
                                   </div>
                                   <div className="flex items-center gap-1 text-slate-400">
                                     <button 
@@ -589,6 +628,38 @@ function DashboardContent() {
                         </button>
                       </div>
 
+                      {routeApprovers.length > 0 && (
+                        <div className="pt-4 mt-2 border-t border-outline-variant/10">
+                          <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Configure Priority Overrides</label>
+                          <div className="space-y-2">
+                            {routeApprovers.map(approverId => {
+                              const mgr = managers.find(m => m.id === approverId);
+                              if (!mgr) return null;
+                              return (
+                                <label key={mgr.id} className="flex items-center gap-3 p-3 bg-surface-container-lowest border border-outline-variant/20 rounded-xl cursor-pointer hover:bg-surface-container-low transition-colors">
+                                  <input 
+                                    type="checkbox" 
+                                    className="w-4 h-4 rounded text-primary focus:ring-primary border-slate-300"
+                                    checked={priorityApprovers.includes(mgr.id)}
+                                    onChange={(e) => {
+                                      if (e.target.checked) setPriorityApprovers([...priorityApprovers, mgr.id]);
+                                      else setPriorityApprovers(priorityApprovers.filter(id => id !== mgr.id));
+                                    }}
+                                  />
+                                  <div className="flex flex-col">
+                                    <span className="font-bold text-sm text-on-surface">{mgr.name}</span>
+                                    <span className="text-[10px] text-slate-500 uppercase tracking-widest">{mgr.designation || 'Manager'}</span>
+                                  </div>
+                                </label>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[10px] mt-3 text-slate-400 font-medium">
+                            If any checked manager takes action, their decision instantly finalizes the entire chain. If unchecked managers act, normal 60% mathematical polling rules apply.
+                          </p>
+                        </div>
+                      )}
+
                       <div className="pt-4">
                         <button 
                           onClick={handleAssignRoute}
@@ -598,6 +669,197 @@ function DashboardContent() {
                           Finalize Sequence
                         </button>
                       </div>
+                    </div>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
+          </>
+        ) : activeTab === "oversight" && user?.role === "ADMIN" ? (
+          <>
+            <header className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-6">
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
+                <p className="text-primary font-bold tracking-widest text-[10px] uppercase">Company Treasury</p>
+                <h2 className="text-4xl font-headline font-extrabold text-on-surface tracking-tighter">
+                  Oversight History
+                </h2>
+              </motion.div>
+            </header>
+
+            {/* Filters */}
+            <section className="bg-surface-container-lowest rounded-2xl p-6 border border-white shadow-sm mb-6 flex flex-wrap gap-4 items-center">
+              <div className="flex-1 min-w-[200px]">
+                <input 
+                  type="text" 
+                  placeholder="Search by Employee..." 
+                  value={oversightFilters.search}
+                  onChange={(e) => setOversightFilters({...oversightFilters, search: e.target.value})}
+                  className="w-full bg-surface-container-low text-on-surface px-4 py-2.5 rounded-xl border-none focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-slate-400 font-medium text-sm" 
+                />
+              </div>
+              <div className="w-48">
+                <select 
+                  value={oversightFilters.status}
+                  onChange={(e) => setOversightFilters({...oversightFilters, status: e.target.value})}
+                  className="w-full bg-surface-container-low text-on-surface px-4 py-2.5 rounded-xl border-r-8 border-transparent focus:ring-2 focus:ring-primary outline-none transition-all font-medium appearance-none text-sm"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="DRAFT">DRAFT</option>
+                  <option value="PENDING">PENDING</option>
+                  <option value="APPROVED">APPROVED</option>
+                  <option value="REJECTED">REJECTED</option>
+                </select>
+              </div>
+              <div className="w-48">
+                <select 
+                  value={oversightFilters.category}
+                  onChange={(e) => setOversightFilters({...oversightFilters, category: e.target.value})}
+                  className="w-full bg-surface-container-low text-on-surface px-4 py-2.5 rounded-xl border-r-8 border-transparent focus:ring-2 focus:ring-primary outline-none transition-all font-medium appearance-none text-sm"
+                >
+                  <option value="">All Categories</option>
+                  {Array.from(new Set(expenses.map(e => e.category))).map(c => (
+                    <option key={String(c)} value={String(c)}>{String(c)}</option>
+                  ))}
+                </select>
+              </div>
+            </section>
+            
+            <section className="bg-surface-container-lowest rounded-2xl p-8 border border-white shadow-sm">
+              {isLoadingExpenses ? (
+                <p className="text-slate-500 font-medium">Loading dataset...</p>
+              ) : filteredOversight.length === 0 ? (
+                <p className="text-slate-500 font-medium">No records match the current filters.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b-2 border-outline-variant/20">
+                        <th className="py-4 pr-4 font-bold text-slate-400 text-xs tracking-wider uppercase">Application</th>
+                        <th className="py-4 px-4 font-bold text-slate-400 text-xs tracking-wider uppercase">Employee</th>
+                        <th className="py-4 px-4 font-bold text-slate-400 text-xs tracking-wider uppercase">Base Amount</th>
+                        <th className="py-4 px-4 font-bold text-slate-400 text-xs tracking-wider uppercase">Pending With</th>
+                        <th className="py-4 px-4 font-bold text-slate-400 text-xs tracking-wider uppercase">Status</th>
+                        <th className="py-4 pl-4 font-bold text-slate-400 text-xs tracking-wider uppercase text-right">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredOversight.map((e) => (
+                        <tr key={e.id} className="border-b border-outline-variant/10 hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 pr-4">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-on-surface truncate max-w-[200px]">{e.description}</span>
+                              <span className="text-xs text-slate-400">{e.category} • {new Date(e.date).toLocaleDateString()}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 font-medium text-slate-700">
+                            {e.submitted_by_name}
+                          </td>
+                          <td className="py-4 px-4 font-bold text-slate-600">
+                            {Number(e.amount_in_base).toLocaleString()} {e.base_currency}
+                          </td>
+                          <td className="py-4 px-4 font-medium text-slate-700 text-sm">
+                            {e.status === 'PENDING' ? e.approval_steps?.find((s:any) => s.status === 'PENDING')?.approver_name || "—" : "—"}
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className={`px-2 py-1 rounded text-[10px] font-bold tracking-widest uppercase ${
+                              e.status === "APPROVED" ? "bg-primary/10 text-primary" : 
+                              e.status === "REJECTED" ? "bg-error/10 text-error" :
+                              e.status === "PENDING" ? "bg-tertiary/10 text-tertiary" : 
+                              "bg-surface-container-high text-on-surface-variant"
+                            }`}>
+                              {e.status}
+                            </span>
+                          </td>
+                          <td className="py-4 pl-4 text-right">
+                            <button 
+                              onClick={() => openOversightModal(e)}
+                              className="p-1.5 text-slate-400 hover:text-primary transition-colors inline-flex items-center gap-1" title="View Audit Trail"
+                            >
+                              <span className="material-symbols-outlined text-[20px]">visibility</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            {/* Audit Trail Modal */}
+            <AnimatePresence>
+              {isOversightModalOpen && selectedOversightExp && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsOversightModalOpen(false)}></div>
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="relative bg-surface-container-lowest p-8 rounded-3xl w-full max-w-2xl shadow-2xl border border-white max-h-[90vh] flex flex-col"
+                  >
+                    <div className="flex items-center justify-between mb-6 shrink-0">
+                      <div>
+                        <h3 className="text-2xl font-bold font-headline text-on-surface">Audit Trail</h3>
+                        <p className="text-sm font-medium text-slate-500 mt-1">{selectedOversightExp.description}</p>
+                      </div>
+                      <button onClick={() => setIsOversightModalOpen(false)} className="text-slate-400 hover:text-error material-symbols-outlined transition-colors">close</button>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto pr-2 space-y-6">
+                      {/* Initial Submission Block */}
+                      <div className="relative pl-6 border-l-2 border-outline-variant/30 pb-6">
+                        <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-outline-variant border-2 border-white"></div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            {new Date(selectedOversightExp.created_at).toLocaleString()}
+                          </span>
+                          <span className="text-base font-bold text-slate-700">Cost Submitted</span>
+                          <span className="text-sm text-slate-500 mt-1">
+                            {selectedOversightExp.submitted_by_name} submitted expense for {Number(selectedOversightExp.amount).toLocaleString()} {selectedOversightExp.currency} (Base: {Number(selectedOversightExp.amount_in_base).toLocaleString()} {selectedOversightExp.base_currency})
+                          </span>
+                        </div>
+                      </div>
+
+                      {isLogsLoading ? (
+                        <p className="pl-6 text-slate-400 font-medium text-sm animate-pulse">Fetching cryptographic logs...</p>
+                      ) : auditLogs.length === 0 ? (
+                        <p className="pl-6 text-slate-400 font-medium text-sm">No actions recorded yet.</p>
+                      ) : (
+                        auditLogs.map((log, idx) => (
+                          <div key={log.id} className={`relative pl-6 border-l-2 pb-6 ${idx === auditLogs.length - 1 ? 'border-transparent' : 'border-outline-variant/30'}`}>
+                            <div className={`absolute -left-[11px] top-0 w-5 h-5 rounded-full border-4 border-white flex items-center justify-center ${
+                              log.action === 'APPROVED' ? 'bg-primary' :
+                              log.action === 'REJECTED' ? 'bg-error' :
+                              'bg-tertiary'
+                            }`}></div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">
+                                {new Date(log.created_at).toLocaleString()}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-base font-bold ${
+                                  log.action === 'APPROVED' ? 'text-primary' :
+                                  log.action === 'REJECTED' ? 'text-error' :
+                                  'text-tertiary'
+                                }`}>{log.action}</span>
+                                <span className="text-xs font-bold tracking-widest text-slate-400 uppercase px-2 bg-slate-100 rounded-md">
+                                  {log.actor_name}
+                                </span>
+                              </div>
+                              {log.comment && (
+                                <p className="text-sm text-slate-600 mt-2 bg-slate-50 p-3 rounded-xl border border-outline-variant/20 italic">
+                                  "{log.comment}"
+                                </p>
+                              )}
+                              {log.metadata && (
+                                <pre className="mt-2 text-[10px] text-slate-500 bg-slate-900/5 p-2 rounded-lg break-words whitespace-pre-wrap">
+                                  {JSON.stringify(log.metadata, null, 2)}
+                                </pre>
+                              )}
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </motion.div>
                 </div>
