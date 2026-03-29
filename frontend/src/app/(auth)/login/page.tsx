@@ -45,7 +45,7 @@ export default function Login() {
       </div>
 
       {/* Main Content Canvas */}
-      <main className="relative z-10 w-full max-w-[1000px] grid lg:grid-cols-2 gap-8 items-center">
+      <main className="relative z-10 w-full max-w-[1000px] grid lg:grid-cols-2 gap-8 items-start">
         {/* Left Side: Editorial Intent & Visual */}
         <motion.div 
           initial={{ opacity: 0, x: -20 }}
@@ -57,15 +57,15 @@ export default function Login() {
             <div className="w-8 h-8 bg-gradient-to-tr from-primary to-primary-container rounded-lg flex items-center justify-center shadow-md shadow-primary/10 group-hover:scale-105 transition-transform">
               <span className="material-symbols-outlined text-on-primary text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>auto_awesome</span>
             </div>
-            <span className="font-headline font-extrabold text-xl tracking-tighter text-on-surface">Aura Hack</span>
+            <span className="font-headline font-extrabold text-xl tracking-tighter text-on-surface">Zync</span>
           </Link>
           
           <div className="space-y-3">
             <h1 className="font-headline text-3xl md:text-4xl font-extrabold tracking-tight text-on-surface leading-tight">
-              Welcome back to your <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary-dim italic">digital sanctuary</span>
+              Welcome back to <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-primary-dim italic">Zync</span>
             </h1>
             <p className="text-base text-on-surface-variant max-w-sm leading-relaxed font-medium">
-              Continue your curation journey. Experience the same clarity and performance you've come to expect.
+              Continue managing your workflows. Experience the clarity and performance of synchronized finance.
             </p>
           </div>
           
@@ -77,8 +77,8 @@ export default function Login() {
             />
             <div className="absolute inset-0 bg-gradient-to-t from-background/60 to-transparent"></div>
             <div className="absolute bottom-4 left-4 right-4 p-3 glass-panel rounded-lg">
-               <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-0.5">Focus Environment</p>
-              <p className="text-xs font-medium text-on-surface italic">"The clarity of the interface directly correlates to the clarity of the code."</p>
+               <p className="text-[10px] font-bold uppercase tracking-widest text-primary mb-0.5">Automated Compliance</p>
+              <p className="text-xs font-medium text-on-surface italic">"Total visibility from receipt submission to payout."</p>
             </div>
           </div>
         </motion.div>
@@ -167,7 +167,7 @@ export default function Login() {
             <div className="mt-8 pt-6 border-t border-outline-variant/5 text-center">
               <p className="text-[9px] text-outline uppercase tracking-[0.15em] leading-relaxed font-bold opacity-60">
                 Protected by reCAPTCHA. Privacy Policy applies. <br />
-                © {new Date().getFullYear()} Aura Hack.
+                © {new Date().getFullYear()} Zync.
               </p>
             </div>
           </div>
@@ -188,7 +188,7 @@ export default function Login() {
             ))}
             <div className="w-6 h-6 rounded-full border-2 border-surface-container-lowest bg-secondary-container flex items-center justify-center text-[8px] font-bold text-on-secondary-container">+12k</div>
           </div>
-          <p className="text-[9px] font-bold text-on-surface-variant uppercase tracking-[0.1em]">Join 12,000+ hackers curated for excellence.</p>
+          <p className="text-[9px] font-bold text-on-surface-variant uppercase tracking-[0.1em]">Trusted by 12,000+ financial teams worldwide.</p>
         </div>
       </footer>
     </div>

@@ -13,7 +13,7 @@ export default function About() {
       <header className="fixed top-0 w-full z-50 bg-white/70 backdrop-blur-md shadow-[0_8px_32px_0_rgba(31,38,135,0.04)]">
         <nav className="flex justify-between items-center px-8 h-16 w-full max-w-7xl mx-auto">
           <Link href="/" className="text-xl font-bold text-slate-900 tracking-tight font-heading">
-            Aura Hack
+            Zync
           </Link>
           <div className="hidden md:flex items-center gap-8">
             <Link
@@ -66,11 +66,11 @@ export default function About() {
             className="flex flex-col items-center z-10"
           >
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold font-heading text-slate-900 leading-[1.1] tracking-tight mb-6">
-              About <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#4a40e0] to-[#fd8bca]">Aura Hack</span>
+              About <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#4a40e0] to-[#fd8bca]">Zync</span>
             </h1>
             
             <p className="text-lg md:text-xl text-slate-600 mb-10 max-w-2xl leading-relaxed">
-              Aura Hack is a modern web application designed to demonstrate the power of Next.js 15, Tailwind CSS, Express.js, and PostgreSQL working seamlessly together. Our mission is to provide developers with a robust, scalable, and beautifully designed template for their next big idea.
+              Zync is a modern expense tracking and reimbursement platform built to synchronize employees, managers, and finance teams. Our mission is to eliminate the friction of paper receipts and spreadsheet chaos by providing a robust, scalable, and seamlessly integrated PostgreSQL-backed ecosystem for corporate workflows.
             </p>
 
             <div className="bg-white/60 backdrop-blur-md border border-slate-200 p-8 rounded-2xl shadow-xl text-left w-full mt-8">
@@ -103,9 +103,9 @@ export default function About() {
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-[#4a40e0] rounded-lg"></div>
-            <span className="text-white font-bold font-heading text-xl">Aura Hack</span>
+            <span className="text-white font-bold font-heading text-xl">Zync</span>
           </div>
-          <p>© {new Date().getFullYear()} Aura Hack Platform. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Zync Platform. All rights reserved.</p>
         </div>
       </footer>
     </div>

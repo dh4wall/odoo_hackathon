@@ -14,7 +14,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Aura Hack | Modern Web Apps",
+  title: "Zync | Syncing employees, managers, and finance",
   description: "The digital curator for your next big idea.",
 };
 
