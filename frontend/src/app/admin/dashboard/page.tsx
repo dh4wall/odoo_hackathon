@@ -205,7 +205,7 @@ function DashboardContent() {
       {/* SideNavBar */}
       <aside className="h-screen w-64 fixed left-0 top-0 bg-slate-50 border-r border-transparent flex flex-col py-6 gap-4 font-body text-sm z-40">
         <div className="px-6 mb-8">
-          <Link href="/" className="text-lg font-bold text-primary tracking-tight font-headline">Aura Hack</Link>
+          <Link href="/" className="text-lg font-bold text-primary tracking-tight font-headline">Zync</Link>
         </div>
         
         {/* User Profile Anchor */}
@@ -1040,7 +1040,7 @@ function DashboardContent() {
              <span className="material-symbols-outlined text-[18px]">language</span>
              <span className="text-[10px] font-bold uppercase tracking-[0.2em]">English (US)</span>
           </div>
-          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">© {new Date().getFullYear()} Aura Hack.</p>
+          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">© {new Date().getFullYear()} Zync.</p>
         </footer>
       </main>
     </div>

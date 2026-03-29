@@ -147,7 +147,7 @@ function EmployeeDashboardContent() {
       {/* SideNavBar */}
       <aside className="h-screen w-64 fixed left-0 top-0 bg-slate-50 border-r border-transparent flex flex-col py-6 gap-4 font-body text-sm z-40">
         <div className="px-6 mb-8">
-          <Link href="/" className="text-lg font-bold text-primary tracking-tight font-headline">Aura Hack</Link>
+          <Link href="/" className="text-lg font-bold text-primary tracking-tight font-headline">Zync</Link>
         </div>
         
         {/* User Profile Anchor */}
@@ -591,7 +591,7 @@ function EmployeeDashboardContent() {
             <Link className="hover:text-primary transition-colors" href="#">Terms</Link>
             <Link className="hover:text-primary transition-colors" href="#">Contact</Link>
           </div>
-          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">© {new Date().getFullYear()} Aura Hack.</p>
+          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">© {new Date().getFullYear()} Zync.</p>
         </footer>
       </main>
     </div>
