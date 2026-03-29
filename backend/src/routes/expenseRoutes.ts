@@ -1,14 +1,36 @@
 import { Router } from "express";
-import { getExpenses, assignApprovers, createMockExpense } from "../controllers/expenseController";
-import { authMiddleware, requireRole } from "../middleware/auth";
+import { applyForReimbursement, getReimbursements } from "../controllers/expenseController";
+import { authMiddleware } from "../middleware/auth";
+import multer from "multer";
+import path from "path";
+import fs from "fs";
 
 const router = Router();
 
-// Admin / Manager / Employee shared view logic (For now strictly ADMIN for assignments)
-router.get("/", authMiddleware, requireRole("ADMIN"), getExpenses);
-router.post("/:id/assign-approvers", authMiddleware, requireRole("ADMIN"), assignApprovers);
+// Setup multer for handling PDF file uploads
+const uploadDir = path.join(__dirname, "../../uploads");
+if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+}
 
-// TEMPORARY: Testing
-router.post("/mock", authMiddleware, requireRole("ADMIN"), createMockExpense);
+const storage = multer.memoryStorage();
+
+const upload = multer({
+    storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype === "application/pdf") {
+            cb(null, true);
+        } else {
+            cb(new Error("Only PDF files are allowed"));
+        }
+    },
+});
+
+// Protect all expense routes
+router.use(authMiddleware);
+
+router.post("/", upload.single("receiptFile"), applyForReimbursement);
+router.get("/", getReimbursements);
 
 export default router;
