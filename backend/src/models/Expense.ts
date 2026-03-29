@@ -74,10 +74,20 @@ export const createExpense = async (
 export const findExpensesByUserId = async (user_id: string): Promise<Expense[]> => {
     try {
         const result = await pool.query(
-            `SELECT * FROM expenses WHERE submitted_by_id = $1 ORDER BY created_at DESC`,
+            `SELECT e.*, 
+               (
+                 SELECT comment 
+                 FROM approval_steps s 
+                 WHERE s.expense_id = e.id AND s.status = 'REJECTED' AND s.comment IS NOT NULL
+                 ORDER BY s.sequence DESC 
+                 LIMIT 1
+               ) as rejection_comment
+             FROM expenses e 
+             WHERE e.submitted_by_id = $1 
+             ORDER BY e.created_at DESC`,
             [user_id]
         );
-        return result.rows as Expense[];
+        return result.rows as (Expense & { rejection_comment?: string })[];
     } catch (error) {
         console.error("Error finding expenses for user:", error);
         throw error;

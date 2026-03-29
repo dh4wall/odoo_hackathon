@@ -355,6 +355,12 @@ function EmployeeDashboardContent() {
                               <span className="text-[10px] text-slate-400 uppercase tracking-widest">
                                 {new Date(r.date || r.created_at).toLocaleDateString()}
                               </span>
+                              {r.status === "REJECTED" && r.rejection_comment && (
+                                <div className="mt-2 p-2 bg-red-50 border-l-2 border-red-500 rounded text-xs text-red-700 font-medium flex gap-2 w-max max-w-[200px] xl:max-w-xs break-words">
+                                  <span className="material-symbols-outlined text-[14px]">comment</span>
+                                  <span className="italic">"{r.rejection_comment}"</span>
+                                </div>
+                              )}
                             </div>
                           </td>
                           <td className="py-4 px-4 font-headline font-extrabold text-primary">
