@@ -35,6 +35,21 @@ function DashboardContent() {
     manager_id: "",
   });
 
+  // Inline Editing State
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState({
+    role: "EMPLOYEE",
+    designation: "",
+    manager_id: "",
+  });
+
+  // Applications State
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [isLoadingExpenses, setIsLoadingExpenses] = useState(false);
+  const [isRouteModalOpen, setIsRouteModalOpen] = useState(false);
+  const [selectedExpenseId, setSelectedExpenseId] = useState<string | null>(null);
+  const [routeApprovers, setRouteApprovers] = useState<string[]>([]);
+
   const fetchUsers = async () => {
     try {
       setIsLoadingUsers(true);
@@ -47,9 +62,25 @@ function DashboardContent() {
     }
   };
 
+  const fetchExpenses = async () => {
+    try {
+      setIsLoadingExpenses(true);
+      const res = await axios.get("http://localhost:5000/api/expenses");
+      setExpenses(res.data);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to fetch applications");
+    } finally {
+      setIsLoadingExpenses(false);
+    }
+  };
+
   useEffect(() => {
-    if (user?.role === "ADMIN" && activeTab === "users") {
-      fetchUsers();
+    if (user?.role === "ADMIN") {
+      if (activeTab === "users") fetchUsers();
+      if (activeTab === "applications") {
+        fetchExpenses();
+        if (users.length === 0) fetchUsers();
+      }
     }
   }, [user?.role, activeTab]);
 
@@ -81,6 +112,48 @@ function DashboardContent() {
     }
   };
 
+  const startEditing = (u: UserData) => {
+    setEditingUserId(u.id);
+    setEditFormData({
+      role: u.role,
+      designation: u.designation || "",
+      manager_id: u.manager_id || "",
+    });
+  };
+
+  const saveEdit = async (id: string) => {
+    try {
+      if (editFormData.role === "MANAGER") editFormData.manager_id = "";
+      await axios.put(`http://localhost:5000/api/users/${id}`, editFormData);
+      toast.success("User updated successfully");
+      setEditingUserId(null);
+      fetchUsers();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to update user");
+    }
+  };
+
+  const openRouteModal = (expenseId: string) => {
+    setSelectedExpenseId(expenseId);
+    setRouteApprovers([]);
+    setIsRouteModalOpen(true);
+  };
+
+  const handleAssignRoute = async () => {
+    if (!selectedExpenseId) return;
+    try {
+      await axios.post(`http://localhost:5000/api/expenses/${selectedExpenseId}/assign-approvers`, {
+        approverIds: routeApprovers
+      });
+      toast.success("Approval route assigned successfully!");
+      setIsRouteModalOpen(false);
+      setRouteApprovers([]);
+      fetchExpenses();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to assign route");
+    }
+  };
+
   const managers = users.filter((u) => u.role === "MANAGER");
 
   const navTabs = [
@@ -92,6 +165,7 @@ function DashboardContent() {
 
   if (user?.role === "ADMIN") {
     navTabs.push({ id: "users", icon: "manage_accounts", label: "User Management" });
+    navTabs.push({ id: "applications", icon: "assignment", label: "Applications" });
   }
 
   return (
@@ -189,7 +263,9 @@ function DashboardContent() {
                       </tr>
                     </thead>
                     <tbody>
-                      {users.map((u) => (
+                      {users.map((u) => {
+                        const isEditing = editingUserId === u.id;
+                        return (
                         <tr key={u.id} className="border-b border-outline-variant/10 hover:bg-slate-50/50 transition-colors">
                           <td className="py-4 pr-4">
                             <div className="flex flex-col">
@@ -198,33 +274,81 @@ function DashboardContent() {
                             </div>
                           </td>
                           <td className="py-4 px-4">
-                            <span className={`px-2 py-1 rounded text-[10px] font-bold tracking-widest uppercase ${
-                              u.role === "ADMIN" ? "bg-primary/10 text-primary" : 
-                              u.role === "MANAGER" ? "bg-tertiary/10 text-tertiary" : 
-                              "bg-surface-container-high text-on-surface-variant"
-                            }`}>
-                              {u.role}
-                            </span>
+                            {isEditing ? (
+                              <select 
+                                value={editFormData.role} 
+                                onChange={(e) => setEditFormData({...editFormData, role: e.target.value})}
+                                className="bg-white border border-outline-variant/30 rounded px-2 py-1 text-xs"
+                              >
+                                <option value="EMPLOYEE">EMPLOYEE</option>
+                                <option value="MANAGER">MANAGER</option>
+                              </select>
+                            ) : (
+                              <span className={`px-2 py-1 rounded text-[10px] font-bold tracking-widest uppercase ${
+                                u.role === "ADMIN" ? "bg-primary/10 text-primary" : 
+                                u.role === "MANAGER" ? "bg-tertiary/10 text-tertiary" : 
+                                "bg-surface-container-high text-on-surface-variant"
+                              }`}>
+                                {u.role}
+                              </span>
+                            )}
                           </td>
-                          <td className="py-4 px-4 text-slate-600 font-medium">{u.designation || "—"}</td>
-                          <td className="py-4 px-4 text-slate-600 font-medium">{u.manager_name || "—"}</td>
+                          <td className="py-4 px-4 text-slate-600 font-medium">
+                            {isEditing ? (
+                              <input 
+                                type="text"
+                                value={editFormData.designation} 
+                                onChange={(e) => setEditFormData({...editFormData, designation: e.target.value})}
+                                className="bg-white border border-outline-variant/30 rounded px-2 py-1 text-xs w-24"
+                                placeholder="..."
+                              />
+                            ) : (
+                              u.designation || "—"
+                            )}
+                          </td>
+                          <td className="py-4 px-4 text-slate-600 font-medium">
+                            {isEditing && editFormData.role === "EMPLOYEE" ? (
+                              <select 
+                                value={editFormData.manager_id} 
+                                onChange={(e) => setEditFormData({...editFormData, manager_id: e.target.value})}
+                                className="bg-white border border-outline-variant/30 rounded px-2 py-1 text-xs w-28"
+                              >
+                                <option value="">None</option>
+                                {managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                              </select>
+                            ) : isEditing ? (
+                              <span className="text-xs text-slate-400">—</span>
+                            ) : (
+                              u.manager_name || "—"
+                            )}
+                          </td>
                           <td className="py-4 px-4 text-slate-500 text-xs">
                             {new Date(u.created_at).toLocaleDateString()}
                           </td>
                           <td className="py-4 pl-4 text-right">
                             {u.role !== "ADMIN" && (
-                              <button 
-                                onClick={() => handleSendCredentials(u.id)}
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface-container-low hover:bg-primary hover:text-white text-primary text-xs font-bold rounded-lg transition-colors group"
-                                title="Reset & Email New Password"
-                              >
-                                <span className="material-symbols-outlined text-[16px]">mail</span>
-                                Send Invite
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                {isEditing ? (
+                                  <>
+                                    <button onClick={() => saveEdit(u.id)} className="p-1.5 bg-primary/10 text-primary rounded hover:bg-primary hover:text-white transition-colors"><span className="material-symbols-outlined text-[16px]">check</span></button>
+                                    <button onClick={() => setEditingUserId(null)} className="p-1.5 bg-error/10 text-error rounded hover:bg-error hover:text-white transition-colors"><span className="material-symbols-outlined text-[16px]">close</span></button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button onClick={() => startEditing(u)} className="p-1.5 text-slate-400 hover:text-primary transition-colors" title="Edit User">
+                                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                                    </button>
+                                    <button onClick={() => handleSendCredentials(u.id)} className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface-container-low hover:bg-primary hover:text-white text-primary text-xs font-bold rounded-lg transition-colors group" title="Reset & Email New Password">
+                                      <span className="material-symbols-outlined text-[16px]">mail</span>
+                                      Send Invite
+                                    </button>
+                                  </>
+                                )}
+                              </div>
                             )}
                           </td>
                         </tr>
-                      ))}
+                      )})}
                     </tbody>
                   </table>
                 </div>
@@ -288,6 +412,193 @@ function DashboardContent() {
                         </button>
                       </div>
                     </form>
+                  </motion.div>
+                </div>
+              )}
+            </AnimatePresence>
+          </>
+        ) : activeTab === "applications" && user?.role === "ADMIN" ? (
+          <>
+            <header className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-6">
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
+                <p className="text-primary font-bold tracking-widest text-[10px] uppercase">Admin Settings</p>
+                <h2 className="text-4xl font-headline font-extrabold text-on-surface tracking-tighter">
+                  Applications & Routing
+                </h2>
+              </motion.div>
+            </header>
+            
+            <section className="bg-surface-container-lowest rounded-2xl p-8 border border-white shadow-sm">
+              {isLoadingExpenses ? (
+                <p className="text-slate-500 font-medium">Loading applications...</p>
+              ) : expenses.length === 0 ? (
+                <p className="text-slate-500 font-medium">No expense applications found.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b-2 border-outline-variant/20">
+                        <th className="py-4 pr-4 font-bold text-slate-400 text-xs tracking-wider uppercase">Application</th>
+                        <th className="py-4 px-4 font-bold text-slate-400 text-xs tracking-wider uppercase">Amount</th>
+                        <th className="py-4 px-4 font-bold text-slate-400 text-xs tracking-wider uppercase">Submitter</th>
+                        <th className="py-4 px-4 font-bold text-slate-400 text-xs tracking-wider uppercase">Status</th>
+                        <th className="py-4 pl-4 font-bold text-slate-400 text-xs tracking-wider uppercase text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {expenses.map((e) => (
+                        <tr key={e.id} className="border-b border-outline-variant/10 hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 pr-4">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-on-surface">{e.description}</span>
+                              <span className="text-xs text-slate-400">{e.category} • {new Date(e.date).toLocaleDateString()}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 font-bold text-slate-600">
+                            {Number(e.amount).toLocaleString()} {e.currency}
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="text-sm font-medium">{e.submitted_by_name}</span>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className={`px-2 py-1 rounded text-[10px] font-bold tracking-widest uppercase ${
+                              e.status === "APPROVED" ? "bg-primary/10 text-primary" : 
+                              e.status === "REJECTED" ? "bg-error/10 text-error" :
+                              e.status === "PENDING" ? "bg-tertiary/10 text-tertiary" : 
+                              "bg-surface-container-high text-on-surface-variant"
+                            }`}>
+                              {e.status}
+                            </span>
+                          </td>
+                          <td className="py-4 pl-4 text-right">
+                            {(e.status === "DRAFT" || e.status === "PENDING") && (
+                              <button 
+                                onClick={() => openRouteModal(e.id)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-surface-container-low hover:bg-primary hover:text-white text-primary text-xs font-bold rounded-lg transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">route</span>
+                                Assign Route
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+
+            {/* Route Builder Modal */}
+            <AnimatePresence>
+              {isRouteModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={() => setIsRouteModalOpen(false)}></div>
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="relative bg-surface-container-lowest p-8 rounded-3xl w-full max-w-lg shadow-2xl border border-white"
+                  >
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-2xl font-bold font-headline text-on-surface">Build Approval Route</h3>
+                      <button onClick={() => setIsRouteModalOpen(false)} className="text-slate-400 hover:text-error material-symbols-outlined transition-colors">close</button>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="bg-surface-container-low p-4 rounded-xl space-y-3">
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500">Route Sequence</label>
+                        {routeApprovers.length === 0 ? (
+                          <p className="text-sm text-slate-400">No approvers added yet. Add a manager below to start the sequence.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            {routeApprovers.map((mgrId, idx) => {
+                              const mgr = managers.find(m => m.id === mgrId);
+                              return (
+                                <div key={idx} className="flex items-center justify-between bg-white p-3 rounded-lg border border-outline-variant/20 shadow-sm">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold">
+                                      {idx + 1}
+                                    </div>
+                                    <span className="text-sm font-bold text-slate-700">{mgr?.name}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1 text-slate-400">
+                                    <button 
+                                      disabled={idx === 0} 
+                                      onClick={() => {
+                                        const newRoute = [...routeApprovers];
+                                        [newRoute[idx-1], newRoute[idx]] = [newRoute[idx], newRoute[idx-1]];
+                                        setRouteApprovers(newRoute);
+                                      }}
+                                      className="p-1 hover:text-primary disabled:opacity-30 transition-colors"
+                                    >
+                                      <span className="material-symbols-outlined text-[16px]">arrow_upward</span>
+                                    </button>
+                                    <button 
+                                      disabled={idx === routeApprovers.length - 1}
+                                      onClick={() => {
+                                        const newRoute = [...routeApprovers];
+                                        [newRoute[idx+1], newRoute[idx]] = [newRoute[idx], newRoute[idx+1]];
+                                        setRouteApprovers(newRoute);
+                                      }}
+                                      className="p-1 hover:text-primary disabled:opacity-30 transition-colors"
+                                    >
+                                      <span className="material-symbols-outlined text-[16px]">arrow_downward</span>
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                        setRouteApprovers(routeApprovers.filter((_, i) => i !== idx));
+                                      }}
+                                      className="p-1 hover:text-error transition-colors ml-2"
+                                    >
+                                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-end gap-3">
+                        <div className="flex-1">
+                          <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">Add Manager to Route</label>
+                          <select 
+                            id="addManagerSelect"
+                            className="w-full bg-surface-container-low text-on-surface px-4 py-3 rounded-xl border-r-8 border-transparent focus:ring-2 focus:ring-primary outline-none transition-all font-medium appearance-none"
+                            defaultValue=""
+                          >
+                            <option value="" disabled>Select a Manager...</option>
+                            {managers.filter(m => !routeApprovers.includes(m.id)).map(m => (
+                              <option key={m.id} value={m.id}>{m.name} ({m.designation || 'Manager'})</option>
+                            ))}
+                          </select>
+                        </div>
+                        <button 
+                          onClick={() => {
+                            const sel = document.getElementById("addManagerSelect") as HTMLSelectElement;
+                            if (sel && sel.value) {
+                              setRouteApprovers([...routeApprovers, sel.value]);
+                              sel.value = "";
+                            }
+                          }}
+                          className="px-6 py-3 bg-surface-container-high hover:bg-primary hover:text-white rounded-xl font-bold transition-all"
+                        >
+                          Add
+                        </button>
+                      </div>
+
+                      <div className="pt-4">
+                        <button 
+                          onClick={handleAssignRoute}
+                          disabled={routeApprovers.length === 0}
+                          className="w-full py-4 bg-primary text-on-primary font-bold tracking-wide rounded-xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100 transition-all"
+                        >
+                          Finalize Sequence
+                        </button>
+                      </div>
+                    </div>
                   </motion.div>
                 </div>
               )}

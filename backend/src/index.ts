@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 
 import authRoutes from "./routes/authRoutes";
 import userRoutes from "./routes/userRoutes";
+import approvalRuleRoutes from "./routes/approvalRuleRoutes";
+import expenseRoutes from "./routes/expenseRoutes";
 
 dotenv.config();
 
@@ -29,6 +31,8 @@ app.use(
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/rules", approvalRuleRoutes);
+app.use("/api/expenses", expenseRoutes);
 
 // Health check
 app.get("/health", (req, res) => {
