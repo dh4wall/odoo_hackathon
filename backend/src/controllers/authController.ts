@@ -5,6 +5,7 @@ import {
   createCompanyAndAdmin,
   findUserById,
   findCompanyById,
+  updateUser,
 } from "../models/User";
 import { hashPassword, comparePassword, generateToken } from "../utils/auth";
 import { getCurrencyForCountry } from "../services/countryService";
@@ -144,6 +145,48 @@ export const getMe = async (req: AuthRequest, res: Response): Promise<void> => {
     });
   } catch (error) {
     console.error("Get me error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export const changePassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!req.userId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    if (!currentPassword || !newPassword) {
+      res.status(400).json({ error: "Both currentPassword and newPassword are required" });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      res.status(400).json({ error: "New password must be at least 6 characters long" });
+      return;
+    }
+
+    const user = await findUserById(req.userId);
+    if (!user) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+
+    const isPasswordValid = await comparePassword(currentPassword, user.password_hash);
+    if (!isPasswordValid) {
+      res.status(401).json({ error: "Incorrect current password" });
+      return;
+    }
+
+    const hashedPassword = await hashPassword(newPassword);
+
+    await updateUser(req.userId, { password_hash: hashedPassword });
+
+    res.json({ message: "Password updated successfully" });
+  } catch (error) {
+    console.error("Change password error:", error);
     res.status(500).json({ error: "Internal server error" });
   }
 };

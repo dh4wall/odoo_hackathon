@@ -128,3 +128,77 @@ export const sendCredentials = async (req: AuthRequest, res: Response): Promise<
     client.release();
   }
 };
+
+export const updateUser = async (req: AuthRequest, res: Response): Promise<void> => {
+  const client = await pool.connect();
+  try {
+    const { companyId } = req;
+    const { id } = req.params;
+    const { role, manager_id, designation } = req.body;
+
+    if (!companyId) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const userRes = await client.query("SELECT * FROM users WHERE id = $1 AND company_id = $2", [id, companyId]);
+    if (userRes.rows.length === 0) {
+      res.status(404).json({ error: "User not found" });
+      return;
+    }
+    const targetUser = userRes.rows[0];
+
+    // Managers demotion guard
+    if (targetUser.role === "MANAGER" && role === "EMPLOYEE") {
+      const pendingRes = await client.query(
+        "SELECT COUNT(*) FROM approval_steps WHERE approver_id = $1 AND status = 'PENDING'", 
+        [id]
+      );
+      if (parseInt(pendingRes.rows[0].count) > 0) {
+        res.status(400).json({ error: "Cannot demote manager: they have pending expense approvals." });
+        return;
+      }
+
+      const directReportsRes = await client.query(
+        "SELECT COUNT(*) FROM users WHERE manager_id = $1",
+        [id]
+      );
+      if (parseInt(directReportsRes.rows[0].count) > 0) {
+        res.status(400).json({ error: "Cannot demote manager: please explicitly reassign their associated employees first." });
+        return;
+      }
+    }
+
+    let finalManagerId = manager_id;
+    if (role === "MANAGER") {
+      finalManagerId = null; 
+    } else if (role === "EMPLOYEE" && manager_id) {
+      const mgrRes = await client.query(
+        "SELECT role FROM users WHERE id = $1 AND company_id = $2",
+        [manager_id, companyId]
+      );
+      if (mgrRes.rows.length === 0 || mgrRes.rows[0].role !== "MANAGER") {
+        res.status(400).json({ error: "Selected manager is invalid or not a MANAGER." });
+        return;
+      }
+    }
+
+    const result = await client.query(
+      `UPDATE users 
+       SET role = COALESCE($1, role), 
+           manager_id = $2, 
+           designation = COALESCE($3, designation),
+           updated_at = NOW()
+       WHERE id = $4 AND company_id = $5
+       RETURNING id, name, email, role, manager_id, designation, created_at, updated_at`,
+      [role, finalManagerId, designation, id, companyId]
+    );
+
+    res.json({ message: "User updated successfully", user: result.rows[0] });
+  } catch (error: any) {
+    console.error("Update user error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  } finally {
+    client.release();
+  }
+};

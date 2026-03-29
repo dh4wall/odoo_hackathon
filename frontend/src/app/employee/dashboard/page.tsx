@@ -28,6 +28,14 @@ function EmployeeDashboardContent() {
     receiptFile: null as File | null,
   });
 
+  // Password Change State
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmNewPassword: ""
+  });
+
   const fetchReimbursements = async () => {
     try {
       setIsLoadingReimb(true);
@@ -44,15 +52,15 @@ function EmployeeDashboardContent() {
   };
 
   useEffect(() => {
-    if (activeTab === "reimbursement" && token) {
+    if (activeTab === "track_issues" && token) {
       fetchReimbursements();
     }
   }, [activeTab, token]);
 
   const navTabs = [
     { id: "dashboard", icon: "dashboard", label: "Dashboard" },
-    { id: "reimbursement", icon: "receipt_long", label: "Reimbursements" },
-    { id: "projects", icon: "folder_open", label: "Projects" },
+    { id: "reimbursement", icon: "add_circle", label: "Apply Reimbursement" },
+    { id: "track_issues", icon: "receipt_long", label: "Track Issues" },
     { id: "tasks", icon: "task_alt", label: "My Tasks" },
     { id: "settings", icon: "settings", label: "Settings" }
   ];
@@ -100,6 +108,38 @@ function EmployeeDashboardContent() {
       });
     } catch (error: any) {
       toast.error(error.response?.data?.error || "Failed to submit reimbursement");
+    }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (passwordForm.newPassword !== passwordForm.confirmNewPassword) {
+      toast.error("New passwords do not match!");
+      return;
+    }
+
+    try {
+      setIsChangingPassword(true);
+      const res = await axios.put(
+        "http://localhost:5000/api/auth/change-password",
+        {
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success(res.data.message || "Password updated successfully!");
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmNewPassword: ""
+      });
+    } catch (error: any) {
+      console.error("Failed to change password", error);
+      toast.error(error.response?.data?.error || "Failed to update password");
+    } finally {
+      setIsChangingPassword(false);
     }
   };
 
@@ -242,23 +282,25 @@ function EmployeeDashboardContent() {
               </motion.div>
             </section>
           </>
-        ) : activeTab === "reimbursement" ? (
+        ) : activeTab === "reimbursement" || activeTab === "track_issues" ? (
           <>
             <header className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-6">
               <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
                 <p className="text-primary font-bold tracking-widest text-[10px] uppercase">Finance & Expenses</p>
                 <h2 className="text-4xl font-headline font-extrabold text-on-surface tracking-tighter">
-                  Reimbursements
+                  {activeTab === "reimbursement" ? "Reimbursements" : "Track Issues"}
                 </h2>
               </motion.div>
               
-              <button 
-                onClick={() => setIsReimbModalOpen(true)}
-                className="px-6 py-3 rounded-xl bg-gradient-to-br from-primary to-primary-dim text-on-primary font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 text-sm"
-              >
-                <span className="material-symbols-outlined text-[20px]">add_circle</span>
-                Apply for Reimbursement
-              </button>
+              {activeTab === "reimbursement" && (
+                <button 
+                  onClick={() => setIsReimbModalOpen(true)}
+                  className="px-6 py-3 rounded-xl bg-gradient-to-br from-primary to-primary-dim text-on-primary font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 text-sm"
+                >
+                  <span className="material-symbols-outlined text-[20px]">add_circle</span>
+                  Apply for Reimbursement
+                </button>
+              )}
             </header>
 
             <section className="bg-surface-container-lowest rounded-2xl p-8 border border-white shadow-sm">
@@ -456,6 +498,82 @@ function EmployeeDashboardContent() {
                 </div>
               )}
             </AnimatePresence>
+          </>
+        ) : activeTab === "settings" ? (
+          <>
+            <header className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-6">
+              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
+                <p className="text-primary font-bold tracking-widest text-[10px] uppercase">Account Controls</p>
+                <h2 className="text-4xl font-headline font-extrabold text-on-surface tracking-tighter">
+                  Settings
+                </h2>
+                <p className="max-w-md text-on-surface-variant font-medium mt-2">
+                  Manage your personal account settings and security credentials.
+                </p>
+              </motion.div>
+            </header>
+
+            <section className="bg-surface-container-lowest rounded-2xl p-8 border border-white shadow-sm max-w-2xl">
+              <div className="flex items-center gap-4 mb-8 pb-4 border-b border-outline-variant/10">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                  <span className="material-symbols-outlined">lock_reset</span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-headline font-bold text-on-surface">Change Password</h3>
+                  <p className="text-sm font-medium text-slate-500">Ensure your account is using a long, random password to stay secure.</p>
+                </div>
+              </div>
+
+              <form onSubmit={handlePasswordChange} className="space-y-6">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Current Password</label>
+                  <input 
+                    required 
+                    type="password" 
+                    value={passwordForm.currentPassword}
+                    onChange={(e) => setPasswordForm({...passwordForm, currentPassword: e.target.value})}
+                    className="w-full bg-surface-container-low text-on-surface px-4 py-3 rounded-xl border-none focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-slate-400 font-medium" 
+                    placeholder="Enter your current password" 
+                  />
+                </div>
+                
+                <div className="pt-2">
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">New Password <span className="text-[9px] text-slate-400 font-normal lowercase tracking-normal">(min. 6 characters)</span></label>
+                  <input 
+                    required 
+                    type="password"
+                    minLength={6}
+                    value={passwordForm.newPassword}
+                    onChange={(e) => setPasswordForm({...passwordForm, newPassword: e.target.value})}
+                    className="w-full bg-surface-container-low text-on-surface px-4 py-3 rounded-xl border-none focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-slate-400 font-medium" 
+                    placeholder="Enter your new password" 
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2">Confirm New Password</label>
+                  <input 
+                    required 
+                    type="password"
+                    minLength={6}
+                    value={passwordForm.confirmNewPassword}
+                    onChange={(e) => setPasswordForm({...passwordForm, confirmNewPassword: e.target.value})}
+                    className="w-full bg-surface-container-low text-on-surface px-4 py-3 rounded-xl border-none focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-slate-400 font-medium" 
+                    placeholder="Re-enter your new password" 
+                  />
+                </div>
+
+                <div className="pt-4 flex justify-end">
+                  <button 
+                    type="submit" 
+                    disabled={isChangingPassword}
+                    className="px-8 py-4 bg-primary text-on-primary font-bold tracking-wide rounded-xl shadow-lg shadow-primary/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-70 disabled:hover:scale-100 flex items-center justify-center"
+                  >
+                    {isChangingPassword ? "Updating..." : "Update Password"}
+                  </button>
+                </div>
+              </form>
+            </section>
           </>
         ) : (
           <div className="flex items-center justify-center h-full text-slate-400 font-medium">
