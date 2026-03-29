@@ -61,7 +61,6 @@ function EmployeeDashboardContent() {
     { id: "dashboard", icon: "dashboard", label: "Dashboard" },
     { id: "reimbursement", icon: "add_circle", label: "Apply Reimbursement" },
     { id: "track_issues", icon: "receipt_long", label: "Track Issues" },
-    { id: "tasks", icon: "task_alt", label: "My Tasks" },
     { id: "settings", icon: "settings", label: "Settings" }
   ];
 
@@ -343,11 +342,11 @@ function EmployeeDashboardContent() {
                           <td className="py-4 px-4 text-slate-600 font-medium">Card</td>
                           <td className="py-4 px-4">
                             <span className={`px-2 py-1 rounded text-[10px] font-bold tracking-widest uppercase ${
-                              r.status === "APPROVED" ? "bg-green-100 text-green-700" : 
-                              r.status === "DRAFT" ? "bg-surface-container-high text-on-surface-variant" : 
+                              (r.status || "DRAFT") === "APPROVED" ? "bg-green-100 text-green-700" : 
+                              (r.status || "DRAFT") === "DRAFT" ? "bg-surface-container-high text-on-surface-variant" : 
                               "bg-orange-100 text-orange-700"
                             }`}>
-                              {r.status || "Pending"}
+                              {r.status || "DRAFT"}
                             </span>
                           </td>
                           <td className="py-4 pl-4 text-slate-600 font-medium">

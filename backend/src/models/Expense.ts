@@ -41,7 +41,7 @@ export const createExpense = async (
         amount, currency, amount_in_base, base_currency, exchange_rate, 
         receipt_url, status
       ) VALUES (
-        gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'PENDING'
+        gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'DRAFT'
       ) RETURNING *`,
             [company_id, submitted_by_id, description, category, date, amount, currency, amount_in_base, base_currency, exchange_rate, receipt_url]
         );

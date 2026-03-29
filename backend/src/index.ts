@@ -35,9 +35,6 @@ app.use("/api/users", userRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/manager", managerRoutes);
 
-// Serve Static files for receipt uploads
-app.use("/uploads", express.static(path.join(__dirname, "../../uploads")));
-
 // Health check
 app.get("/health", (req, res) => {
   res.json({ status: "Server is running" });

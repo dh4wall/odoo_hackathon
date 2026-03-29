@@ -18,6 +18,12 @@ export const applyForReimbursement = async (req: AuthRequest, res: Response): Pr
             return;
         }
 
+        const parsedAmount = parseFloat(amount);
+        if (isNaN(parsedAmount)) {
+            res.status(400).json({ error: "Invalid amount provided" });
+            return;
+        }
+
         // Convert the file buffer to a Base64 Data URI to store it directly in the DB
         const base64Data = file.buffer.toString("base64");
         const receipt_url = `data:${file.mimetype};base64,${base64Data}`;
@@ -28,15 +34,15 @@ export const applyForReimbursement = async (req: AuthRequest, res: Response): Pr
             description,
             category,
             date,
-            parseFloat(amount),
+            parsedAmount,
             currency,
             receipt_url
         );
 
         res.status(201).json(newExpense);
-    } catch (error) {
+    } catch (error: any) {
         console.error("Apply Reimb Error:", error);
-        res.status(500).json({ error: "Internal server error" });
+        res.status(500).json({ error: error.message || error.toString() });
     }
 };
 

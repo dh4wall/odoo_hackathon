@@ -7,11 +7,7 @@ import fs from "fs";
 
 const router = Router();
 
-// Setup multer for handling PDF file uploads
-const uploadDir = path.join(__dirname, "../../uploads");
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
+// Setup multer for handling PDF file uploads directly in memory
 
 const storage = multer.memoryStorage();
 
@@ -30,7 +26,14 @@ const upload = multer({
 // Protect all expense routes
 router.use(authMiddleware);
 
-router.post("/", upload.single("receiptFile"), applyForReimbursement);
+router.post("/", (req, res, next) => {
+    upload.single("receiptFile")(req, res, (err) => {
+        if (err) {
+            return res.status(400).json({ error: err.message });
+        }
+        next();
+    });
+}, applyForReimbursement);
 router.get("/", getReimbursements);
 
 // Admin manual routing endpoints
