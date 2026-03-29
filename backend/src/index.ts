@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/authRoutes";
 import userRoutes from "./routes/userRoutes";
 import expenseRoutes from "./routes/expenseRoutes";
+import managerRoutes from "./routes/managerRoutes";
 import path from "path";
 
 dotenv.config();
@@ -32,6 +33,7 @@ app.use(
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/expenses", expenseRoutes);
+app.use("/api/manager", managerRoutes);
 
 // Serve Static files for receipt uploads
 app.use("/uploads", express.static(path.join(__dirname, "../../uploads")));

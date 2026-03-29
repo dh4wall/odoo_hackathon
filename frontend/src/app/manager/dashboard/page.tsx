@@ -1,18 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { useAuth } from "@/context/AuthContext";
 import { motion, AnimatePresence } from "framer-motion";
+import axios from "axios";
 import { toast } from "sonner";
 
+const API = "http://localhost:5000/api/manager";
+
+// Validate ISO 4217 currency code — fall back to USD if the stored value is a symbol
+const VALID_CURRENCIES = new Set(Intl.supportedValuesOf("currency"));
+const safeCurrency = (code: string) => (VALID_CURRENCIES.has(code) ? code : "USD");
+
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Status = "PENDING" | "APPROVED" | "REJECTED";
+type Status = "PENDING" | "APPROVED" | "REJECTED" | "DRAFT";
 
 interface ExpenseRequest {
   id: string;
   employee_name: string;
+  employee_designation: string | null;
   expense_date: string;
   amount: number;
   currency: string;
@@ -20,66 +28,8 @@ interface ExpenseRequest {
   description: string;
   receipt_url: string | null;
   status: Status;
+  created_at: string;
 }
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-const MOCK_REQUESTS: ExpenseRequest[] = [
-  {
-    id: "req-1",
-    employee_name: "Sarah Chen",
-    expense_date: "2026-03-25",
-    amount: 1250.00,
-    currency: "USD",
-    category: "Travel",
-    description: "Flight to NYC for Q3 Planning Summit",
-    receipt_url: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=600&q=80",
-    status: "PENDING",
-  },
-  {
-    id: "req-2",
-    employee_name: "Marcus Rivers",
-    expense_date: "2026-03-26",
-    amount: 450.75,
-    currency: "USD",
-    category: "Office Supplies",
-    description: "Ergonomic chair for home office setup",
-    receipt_url: null,
-    status: "PENDING",
-  },
-  {
-    id: "req-3",
-    employee_name: "Elena Rodriguez",
-    expense_date: "2026-03-22",
-    amount: 85.00,
-    currency: "USD",
-    category: "Meals",
-    description: "Client dinner with Flux Media team",
-    receipt_url: "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=600&q=80",
-    status: "APPROVED",
-  },
-  {
-    id: "req-4",
-    employee_name: "James Okafor",
-    expense_date: "2026-03-21",
-    amount: 320.00,
-    currency: "USD",
-    category: "Training",
-    description: "Online course — Advanced SQL & Performance Tuning",
-    receipt_url: null,
-    status: "REJECTED",
-  },
-  {
-    id: "req-5",
-    employee_name: "Priya Nair",
-    expense_date: "2026-03-20",
-    amount: 680.00,
-    currency: "USD",
-    category: "Travel",
-    description: "Hotel stay during client onboarding week",
-    receipt_url: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=600&q=80",
-    status: "APPROVED",
-  },
-];
 
 // ─── Status Badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }: { status: Status }) {
@@ -87,6 +37,7 @@ function StatusBadge({ status }: { status: Status }) {
     PENDING:  "bg-amber-100 text-amber-700",
     APPROVED: "bg-green-100 text-green-700",
     REJECTED: "bg-red-100 text-red-700",
+    DRAFT:    "bg-slate-100 text-slate-500",
   };
   return (
     <span className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${styles[status]}`}>
@@ -99,28 +50,25 @@ function StatusBadge({ status }: { status: Status }) {
 interface ActionModalProps {
   request: ExpenseRequest;
   onClose: () => void;
-  onAction: (id: string, action: Status, note: string) => void;
+  onAction: (id: string, action: "APPROVED" | "REJECTED", note: string) => Promise<void>;
 }
 
 function ActionModal({ request, onClose, onAction }: ActionModalProps) {
   const [note, setNote] = useState("");
   const [pendingAction, setPendingAction] = useState<"APPROVED" | "REJECTED" | null>(null);
   const [loading, setLoading] = useState(false);
+  const isPending = request.status === "PENDING";
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!pendingAction) return;
     if (pendingAction === "REJECTED" && !note.trim()) {
       toast.error("A reason is required when rejecting.");
       return;
     }
     setLoading(true);
-    setTimeout(() => {
-      onAction(request.id, pendingAction, note);
-      setLoading(false);
-    }, 600);
+    await onAction(request.id, pendingAction, note);
+    setLoading(false);
   };
-
-  const isPending = request.status === "PENDING";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -133,7 +81,6 @@ function ActionModal({ request, onClose, onAction }: ActionModalProps) {
         initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
         className="relative bg-surface-container-lowest p-8 rounded-3xl w-full max-w-lg shadow-2xl border border-white overflow-y-auto max-h-[90vh]"
       >
-        {/* Header */}
         <div className="flex items-start justify-between mb-6">
           <div>
             <h3 className="text-2xl font-bold font-headline text-on-surface">
@@ -141,6 +88,9 @@ function ActionModal({ request, onClose, onAction }: ActionModalProps) {
             </h3>
             <p className="text-sm text-on-surface-variant mt-0.5">
               Submitted by <span className="font-bold text-on-surface">{request.employee_name}</span>
+              {request.employee_designation && (
+                <span className="text-on-surface-variant"> · {request.employee_designation}</span>
+              )}
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-error transition-colors material-symbols-outlined">close</button>
@@ -157,7 +107,7 @@ function ActionModal({ request, onClose, onAction }: ActionModalProps) {
           <div>
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Amount</p>
             <p className="font-extrabold text-on-surface text-xl font-headline">
-              {request.amount.toLocaleString("en-US", { style: "currency", currency: request.currency })}
+              {Number(request.amount).toLocaleString("en-US", { style: "currency", currency: safeCurrency(request.currency) })}
             </p>
           </div>
           <div>
@@ -174,18 +124,32 @@ function ActionModal({ request, onClose, onAction }: ActionModalProps) {
           </div>
         </div>
 
-        {/* Receipt Image */}
+        {/* Receipt */}
         <div className="mb-5">
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Receipt / Attachment</p>
           {request.receipt_url ? (
             <div className="relative rounded-2xl overflow-hidden border border-outline-variant/10 h-48">
-              <img src={request.receipt_url} alt="Receipt" className="w-full h-full object-cover" />
-              <a
-                href={request.receipt_url} target="_blank" rel="noopener noreferrer"
-                className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm text-primary text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg hover:bg-white transition flex items-center gap-1 shadow-sm"
-              >
-                <span className="material-symbols-outlined text-[14px]">open_in_new</span> Open
-              </a>
+              {request.receipt_url.startsWith("data:application/pdf") ? (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50 gap-3">
+                  <span className="material-symbols-outlined text-5xl text-red-400">picture_as_pdf</span>
+                  <a
+                    href={request.receipt_url} target="_blank" rel="noopener noreferrer"
+                    className="text-primary text-xs font-bold underline underline-offset-2"
+                  >
+                    Open PDF Receipt
+                  </a>
+                </div>
+              ) : (
+                <>
+                  <img src={request.receipt_url} alt="Receipt" className="w-full h-full object-cover" />
+                  <a
+                    href={request.receipt_url} target="_blank" rel="noopener noreferrer"
+                    className="absolute bottom-2 right-2 bg-white/90 backdrop-blur-sm text-primary text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg hover:bg-white transition flex items-center gap-1 shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">open_in_new</span> Open
+                  </a>
+                </>
+              )}
             </div>
           ) : (
             <div className="h-28 rounded-2xl border-2 border-dashed border-outline-variant/20 flex flex-col items-center justify-center text-slate-400 gap-2">
@@ -195,7 +159,7 @@ function ActionModal({ request, onClose, onAction }: ActionModalProps) {
           )}
         </div>
 
-        {/* Actions — only for PENDING */}
+        {/* Actions — PENDING only */}
         {isPending && (
           <>
             {!pendingAction ? (
@@ -223,7 +187,6 @@ function ActionModal({ request, onClose, onAction }: ActionModalProps) {
                   {pendingAction === "APPROVED" ? "Approving this request" : "Rejecting this request"}
                   <button onClick={() => setPendingAction(null)} className="ml-auto text-[10px] underline font-medium opacity-70 hover:opacity-100">Change</button>
                 </div>
-
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-1">
                     {pendingAction === "APPROVED" ? "Note (Optional)" : "Reason for Rejection"}
@@ -236,7 +199,6 @@ function ActionModal({ request, onClose, onAction }: ActionModalProps) {
                     className="w-full bg-surface-container-low text-on-surface px-4 py-3 rounded-xl border-none focus:ring-2 focus:ring-primary outline-none transition-all placeholder:text-slate-400 font-medium min-h-[90px] resize-none"
                   />
                 </div>
-
                 <button
                   onClick={handleSubmit}
                   disabled={loading}
@@ -246,11 +208,10 @@ function ActionModal({ request, onClose, onAction }: ActionModalProps) {
                       : "bg-red-600 text-white shadow-red-200"
                   }`}
                 >
-                  {loading ? (
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    `Confirm ${pendingAction === "APPROVED" ? "Approval" : "Rejection"}`
-                  )}
+                  {loading
+                    ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    : `Confirm ${pendingAction === "APPROVED" ? "Approval" : "Rejection"}`
+                  }
                 </button>
               </div>
             )}
@@ -262,28 +223,26 @@ function ActionModal({ request, onClose, onAction }: ActionModalProps) {
 }
 
 // ─── Analytics / Dashboard Tab ────────────────────────────────────────────────
-function DashboardTab({ requests, user }: { requests: ExpenseRequest[]; user: any }) {
-  const total = requests.length;
-  const pending = requests.filter(r => r.status === "PENDING").length;
+function DashboardTab({ requests, user, loading }: { requests: ExpenseRequest[]; user: any; loading: boolean }) {
+  const total    = requests.length;
+  const pending  = requests.filter(r => r.status === "PENDING").length;
   const approved = requests.filter(r => r.status === "APPROVED").length;
   const rejected = requests.filter(r => r.status === "REJECTED").length;
-  const totalAmount = requests.reduce((s, r) => s + r.amount, 0);
-  const approvedAmount = requests.filter(r => r.status === "APPROVED").reduce((s, r) => s + r.amount, 0);
+  const totalAmount    = requests.reduce((s, r) => s + Number(r.amount), 0);
+  const approvedAmount = requests.filter(r => r.status === "APPROVED").reduce((s, r) => s + Number(r.amount), 0);
 
   const stats = [
-    { label: "Pending Review",   value: pending,  icon: "inbox",         color: "text-amber-600",  bg: "bg-amber-50"  },
-    { label: "Approved",         value: approved, icon: "check_circle",  color: "text-green-600",  bg: "bg-green-50"  },
-    { label: "Rejected",         value: rejected, icon: "cancel",        color: "text-red-500",    bg: "bg-red-50"    },
-    { label: "Total Requests",   value: total,    icon: "list_alt",      color: "text-primary",    bg: "bg-primary/5" },
+    { label: "Pending Review", value: pending,  icon: "inbox",        color: "text-amber-600", bg: "bg-amber-50"  },
+    { label: "Approved",       value: approved, icon: "check_circle", color: "text-green-600", bg: "bg-green-50"  },
+    { label: "Rejected",       value: rejected, icon: "cancel",       color: "text-red-500",   bg: "bg-red-50"    },
+    { label: "Total Requests", value: total,    icon: "list_alt",     color: "text-primary",   bg: "bg-primary/5" },
   ];
 
-  // Weekly volume mock bars
   const weeklyBars = [45, 62, 38, 80, 55, 90, 70];
   const weekDays   = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   return (
     <>
-      {/* Header */}
       <header className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
           <p className="text-primary font-bold tracking-widest text-[10px] uppercase">Manager Workspace</p>
@@ -291,7 +250,7 @@ function DashboardTab({ requests, user }: { requests: ExpenseRequest[]; user: an
             Good Morning, {user?.name?.split(" ")[0] || "Manager"}.
           </h2>
           <p className="text-on-surface-variant font-medium max-w-md">
-            Your approval queue is synced. You have <span className="font-bold text-primary">{pending} pending</span> requests today.
+            {loading ? "Syncing queue..." : <>You have <span className="font-bold text-primary">{pending} pending</span> requests today.</>}
           </p>
         </motion.div>
         <div className="flex gap-4">
@@ -311,25 +270,24 @@ function DashboardTab({ requests, user }: { requests: ExpenseRequest[]; user: an
         {stats.map((s, i) => (
           <motion.div
             key={s.label}
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.07 }}
+            initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.07 }}
             className="bg-surface-container-lowest rounded-2xl p-6 border border-white shadow-sm flex flex-col gap-4 hover:shadow-md transition-all"
           >
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${s.bg}`}>
               <span className={`material-symbols-outlined text-[22px] ${s.color}`}>{s.icon}</span>
             </div>
             <div>
-              <p className="text-3xl font-headline font-extrabold text-on-surface tracking-tighter">{s.value}</p>
+              <p className="text-3xl font-headline font-extrabold text-on-surface tracking-tighter">
+                {loading ? "—" : s.value}
+              </p>
               <p className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant mt-0.5">{s.label}</p>
             </div>
           </motion.div>
         ))}
       </section>
 
-      {/* Chart + Summary Bento */}
+      {/* Bento: Chart + Summary */}
       <section className="grid grid-cols-12 gap-6 mb-10">
-        {/* Bar Chart */}
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
           className="col-span-12 lg:col-span-8 p-8 rounded-2xl bg-surface-container-lowest glass-card shadow-sm relative overflow-hidden group border-white"
@@ -340,32 +298,27 @@ function DashboardTab({ requests, user }: { requests: ExpenseRequest[]; user: an
               <p className="text-on-surface-variant text-sm font-medium">Requests processed per day — current week</p>
             </div>
             <div className="flex items-center gap-2 px-3 py-1 bg-secondary-container/30 text-on-secondary-container rounded-full text-[10px] font-bold uppercase tracking-wider">
-              <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
               This Week
             </div>
           </div>
-
           <div className="flex items-end gap-3 min-h-[180px] pb-2">
             {weeklyBars.map((h, i) => (
               <div key={i} className="flex-1 flex flex-col items-center gap-2">
                 <div
-                  className={`w-full rounded-t-lg transition-all duration-500 ${
-                    i === 5 ? "bg-primary shadow-[0_0_20px_rgba(74,64,224,0.3)]" : "bg-surface-container-low group-hover:bg-primary/20"
-                  }`}
+                  className={`w-full rounded-t-lg transition-all duration-500 ${i === 5 ? "bg-primary shadow-[0_0_20px_rgba(74,64,224,0.3)]" : "bg-surface-container-low group-hover:bg-primary/20"}`}
                   style={{ height: `${h}%` }}
                 />
                 <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">{weekDays[i]}</span>
               </div>
             ))}
           </div>
-
           <div className="mt-4 flex items-center justify-between text-[11px] font-bold uppercase tracking-widest text-on-surface-variant border-t border-outline-variant/10 pt-4">
             <span>Mar 23 — Mar 29, 2026</span>
             <span className="text-primary font-extrabold">+18.4% vs last week</span>
           </div>
         </motion.div>
 
-        {/* Summary Card */}
         <motion.div
           initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
           className="col-span-12 lg:col-span-4 p-8 rounded-2xl bg-primary text-on-primary flex flex-col justify-between shadow-xl shadow-primary/10 overflow-hidden relative"
@@ -376,14 +329,14 @@ function DashboardTab({ requests, user }: { requests: ExpenseRequest[]; user: an
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-on-primary/60 mb-1">Total Approved Value</p>
               <p className="text-3xl font-headline font-extrabold tracking-tight">
-                {approvedAmount.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                {loading ? "—" : approvedAmount.toLocaleString("en-US", { style: "currency", currency: "USD" })}
               </p>
             </div>
             <div className="h-px bg-white/10" />
             <div>
               <p className="text-[10px] font-bold uppercase tracking-widest text-on-primary/60 mb-1">Total Pipeline</p>
               <p className="text-xl font-headline font-bold">
-                {totalAmount.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                {loading ? "—" : totalAmount.toLocaleString("en-US", { style: "currency", currency: "USD" })}
               </p>
             </div>
           </div>
@@ -397,67 +350,75 @@ function DashboardTab({ requests, user }: { requests: ExpenseRequest[]; user: an
       {/* Recent Activity */}
       <div className="flex items-center justify-between mb-6">
         <h3 className="text-2xl font-headline font-bold text-on-surface tracking-tight">Recent Activity</h3>
-        <button className="text-primary font-bold text-sm hover:underline underline-offset-4 uppercase tracking-widest">View All</button>
       </div>
-
       <section className="bg-surface-container-lowest rounded-2xl border border-white shadow-sm overflow-hidden mb-12">
-        <div className="divide-y divide-outline-variant/5">
-          {requests.slice(0, 4).map((req) => (
-            <div key={req.id} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50/50 transition-colors">
-              <div className="flex items-center gap-4">
-                <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-extrabold text-sm shrink-0">
-                  {req.employee_name.charAt(0)}
+        {loading ? (
+          <div className="flex items-center justify-center h-32">
+            <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+          </div>
+        ) : requests.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <p className="font-bold text-on-surface">No requests yet.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-outline-variant/5">
+            {requests.slice(0, 5).map((req) => (
+              <div key={req.id} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50/50 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-extrabold text-sm shrink-0">
+                    {req.employee_name.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm text-on-surface">{req.employee_name}</p>
+                    <p className="text-xs text-on-surface-variant font-medium">{req.description}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="font-bold text-sm text-on-surface">{req.employee_name}</p>
-                  <p className="text-xs text-on-surface-variant font-medium">{req.description}</p>
+                <div className="flex items-center gap-6 text-right">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Amount</p>
+                    <p className="font-bold text-sm text-on-surface">
+                      {Number(req.amount).toLocaleString("en-US", { style: "currency", currency: safeCurrency(req.currency) })}
+                    </p>
+                  </div>
+                  <StatusBadge status={req.status} />
                 </div>
               </div>
-              <div className="flex items-center gap-6 text-right">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Amount</p>
-                  <p className="font-bold text-sm text-on-surface">{req.amount.toLocaleString("en-US", { style: "currency", currency: req.currency })}</p>
-                </div>
-                <StatusBadge status={req.status} />
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </section>
     </>
   );
 }
 
-// ─── Requests Table Tab ───────────────────────────────────────────────────────
+// ─── Requests Table ───────────────────────────────────────────────────────────
 function RequestsTab({
-  requests,
-  filterStatus,
-  onSelect,
+  requests, filterStatus, onSelect, loading,
 }: {
   requests: ExpenseRequest[];
-  filterStatus?: Status;
+  filterStatus?: "PENDING";
   onSelect: (r: ExpenseRequest) => void;
+  loading: boolean;
 }) {
-  const displayed = filterStatus ? requests.filter((r) => r.status === filterStatus) : requests;
-  const title = filterStatus === "PENDING" ? "Pending Approvals" : "All Requests";
-  const subtitle = filterStatus === "PENDING"
-    ? `${displayed.length} request${displayed.length !== 1 ? "s" : ""} awaiting your decision`
-    : `${displayed.length} total request${displayed.length !== 1 ? "s" : ""} across your team`;
+  const displayed = filterStatus ? requests.filter(r => r.status === filterStatus) : requests;
 
   return (
     <>
       <header className="flex flex-col md:flex-row md:items-end justify-between mb-8 gap-6">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-1">
           <p className="text-primary font-bold tracking-widest text-[10px] uppercase">
-            {filterStatus === "PENDING" ? "Action Required" : "All Records"}
+            {filterStatus ? "Action Required" : "All Records"}
           </p>
-          <h2 className="text-4xl font-headline font-extrabold text-on-surface tracking-tighter">{title}</h2>
-          <p className="text-on-surface-variant font-medium">{subtitle}</p>
+          <h2 className="text-4xl font-headline font-extrabold text-on-surface tracking-tighter">
+            {filterStatus ? "Pending Approvals" : "All Requests"}
+          </h2>
+          <p className="text-on-surface-variant font-medium">
+            {loading ? "Syncing..." : `${displayed.length} request${displayed.length !== 1 ? "s" : ""}`}
+          </p>
         </motion.div>
       </header>
 
       <section className="bg-surface-container-lowest rounded-2xl border border-white shadow-sm overflow-hidden">
-        {/* Table header */}
         <div className="grid grid-cols-[2fr_1.2fr_1fr_1fr_auto] gap-4 px-6 py-3 bg-slate-50 border-b border-slate-100 text-[10px] font-bold uppercase tracking-widest text-slate-400">
           <span>Employee</span>
           <span>Date of Expense</span>
@@ -466,7 +427,11 @@ function RequestsTab({
           <span>Action</span>
         </div>
 
-        {displayed.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center h-48">
+            <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+          </div>
+        ) : displayed.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center mb-4">
               <span className="material-symbols-outlined text-slate-400 text-3xl">done_all</span>
@@ -479,7 +444,7 @@ function RequestsTab({
             {displayed.map((req, idx) => (
               <motion.div
                 key={req.id}
-                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.05 }}
+                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.04 }}
                 className="grid grid-cols-[2fr_1.2fr_1fr_1fr_auto] gap-4 items-center px-6 py-4 hover:bg-slate-50/60 transition-colors"
               >
                 <div className="flex items-center gap-3 min-w-0">
@@ -497,7 +462,7 @@ function RequestsTab({
                 </p>
 
                 <p className="font-bold text-sm text-on-surface">
-                  {req.amount.toLocaleString("en-US", { style: "currency", currency: req.currency })}
+                  {Number(req.amount).toLocaleString("en-US", { style: "currency", currency: safeCurrency(req.currency) })}
                 </p>
 
                 <StatusBadge status={req.status} />
@@ -531,7 +496,6 @@ function SettingsTab({ user }: { user: any }) {
           <h2 className="text-4xl font-headline font-extrabold text-on-surface tracking-tighter">Settings</h2>
         </motion.div>
       </header>
-
       <section className="bg-surface-container-lowest rounded-2xl p-8 border border-white shadow-sm space-y-6 max-w-xl">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Profile</p>
@@ -546,7 +510,6 @@ function SettingsTab({ user }: { user: any }) {
             </div>
           </div>
         </div>
-
         <div>
           <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-3">Notifications</p>
           {[
@@ -562,7 +525,6 @@ function SettingsTab({ user }: { user: any }) {
             </div>
           ))}
         </div>
-
         <p className="text-[9px] text-slate-400 uppercase tracking-widest">Settings are display-only in this build.</p>
       </section>
     </>
@@ -573,22 +535,43 @@ function SettingsTab({ user }: { user: any }) {
 function ManagerDashboardContent() {
   const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [requests, setRequests] = useState<ExpenseRequest[]>(MOCK_REQUESTS);
+  const [allRequests, setAllRequests] = useState<ExpenseRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ExpenseRequest | null>(null);
 
-  const pendingCount = requests.filter((r) => r.status === "PENDING").length;
+  // Fetch all expenses once (used for dashboard analytics + "all" tab)
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get(`${API}/all`);
+      setAllRequests(res.data);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Failed to load requests");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const handleAction = (id: string, action: Status, _note: string) => {
-    setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, status: action } : r)));
-    toast.success(`Request ${action.toLowerCase()} successfully.`);
-    setSelected(null);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const pendingCount = allRequests.filter(r => r.status === "PENDING").length;
+
+  const handleAction = async (id: string, action: "APPROVED" | "REJECTED", note: string) => {
+    try {
+      await axios.post(`${API}/action/${id}`, { action, note });
+      toast.success(`Request ${action.toLowerCase()} successfully.`);
+      setSelected(null);
+      fetchAll(); // refresh state from server
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || "Action failed");
+    }
   };
 
   const navTabs = [
-    { id: "dashboard",    icon: "dashboard",   label: "Dashboard"    },
-    { id: "pending",      icon: "inbox",       label: "Pending",     badge: pendingCount },
-    { id: "all",          icon: "list_alt",    label: "All Requests" },
-    { id: "settings",     icon: "settings",    label: "Settings"     },
+    { id: "dashboard", icon: "dashboard",  label: "Dashboard"    },
+    { id: "pending",   icon: "inbox",      label: "Pending",     badge: pendingCount },
+    { id: "all",       icon: "list_alt",   label: "All Requests" },
+    { id: "settings",  icon: "settings",   label: "Settings"     },
   ];
 
   return (
@@ -599,7 +582,6 @@ function ManagerDashboardContent() {
           <Link href="/" className="text-lg font-bold text-primary tracking-tight font-headline">Aura Hack</Link>
         </div>
 
-        {/* User chip */}
         <div className="px-4 mb-6">
           <div className="flex items-center gap-3 p-3 rounded-xl bg-white/50 backdrop-blur-sm shadow-sm border border-white">
             <div className="w-10 h-10 rounded-full bg-primary/10 ring-2 ring-primary/10 flex items-center justify-center text-primary font-extrabold">
@@ -612,7 +594,6 @@ function ManagerDashboardContent() {
           </div>
         </div>
 
-        {/* Nav */}
         <nav className="flex-1 px-2 space-y-1">
           {navTabs.map((tab) => (
             <button
@@ -648,12 +629,11 @@ function ManagerDashboardContent() {
 
       {/* ── Main ── */}
       <main className="ml-64 flex-1 p-8 lg:p-12 overflow-y-auto">
-        {activeTab === "dashboard" && <DashboardTab requests={requests} user={user} />}
-        {activeTab === "pending"   && <RequestsTab requests={requests} filterStatus="PENDING" onSelect={setSelected} />}
-        {activeTab === "all"       && <RequestsTab requests={requests} onSelect={setSelected} />}
+        {activeTab === "dashboard" && <DashboardTab requests={allRequests} user={user} loading={loading} />}
+        {activeTab === "pending"   && <RequestsTab requests={allRequests} filterStatus="PENDING" onSelect={setSelected} loading={loading} />}
+        {activeTab === "all"       && <RequestsTab requests={allRequests} onSelect={setSelected} loading={loading} />}
         {activeTab === "settings"  && <SettingsTab user={user} />}
 
-        {/* Footer */}
         <footer className="mt-20 py-12 border-t border-slate-100 flex flex-col items-center gap-6">
           <div className="flex gap-8 text-[10px] font-bold uppercase tracking-widest text-slate-400">
             <Link className="hover:text-primary transition-colors" href="#">Privacy</Link>
@@ -664,7 +644,6 @@ function ManagerDashboardContent() {
         </footer>
       </main>
 
-      {/* ── Modal ── */}
       <AnimatePresence>
         {selected && (
           <ActionModal
