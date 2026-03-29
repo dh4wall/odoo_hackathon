@@ -4,6 +4,8 @@ import dotenv from "dotenv";
 
 import authRoutes from "./routes/authRoutes";
 import userRoutes from "./routes/userRoutes";
+import expenseRoutes from "./routes/expenseRoutes";
+import path from "path";
 
 dotenv.config();
 
@@ -29,6 +31,10 @@ app.use(
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/expenses", expenseRoutes);
+
+// Serve Static files for receipt uploads
+app.use("/uploads", express.static(path.join(__dirname, "../../uploads")));
 
 // Health check
 app.get("/health", (req, res) => {
