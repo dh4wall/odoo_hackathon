@@ -15,7 +15,7 @@ const VALID_CURRENCIES = new Set(Intl.supportedValuesOf("currency"));
 const safeCurrency = (code: string) => (VALID_CURRENCIES.has(code) ? code : "USD");
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Status = "PENDING" | "APPROVED" | "REJECTED" | "DRAFT";
+type Status = "PENDING" | "APPROVED" | "REJECTED" | "DRAFT" | "LOCKED";
 
 interface ExpenseRequest {
   id: string;
@@ -38,6 +38,7 @@ function StatusBadge({ status }: { status: Status }) {
     APPROVED: "bg-green-100 text-green-700",
     REJECTED: "bg-red-100 text-red-700",
     DRAFT:    "bg-slate-100 text-slate-500",
+    LOCKED:   "bg-indigo-100 text-indigo-700 font-medium",
   };
   return (
     <span className={`px-2.5 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${styles[status]}`}>
